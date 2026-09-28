@@ -99,6 +99,42 @@ def test_parse_gpu_count_unparseable_is_none():
     assert parse_gpu_count("garbage:xyz") is None
 
 
+# --- HPC-13: interactive-vs-batch detection --------------------------------
+
+_CFG = {
+    "cluster_name": "X",
+    "partitions": {"compute": {"is_default": True, "has_gpu": False,
+                               "cpus_per_task_max": 8, "mem_gb_max": 64}},
+    "required_fields": [], "recommended_fields": [],
+}
+
+
+def _job(tmp_path, text):
+    p = tmp_path / "job.sh"
+    p.write_text(text)
+    return str(p)
+
+
+def test_interactive_detected(tmp_path):
+    s = _job(tmp_path, "#!/bin/bash\n#SBATCH --partition compute\njupyter notebook\n")
+    _, issues = check_script(s, _CFG)
+    assert any("interactive" in i.lower() for i in issues)
+
+
+def test_interactive_wrong_partition_names_alternatives(tmp_path):
+    cfg = dict(_CFG)
+    cfg["interactive_partitions"] = ["interactive", "login"]
+    s = _job(tmp_path, "#!/bin/bash\n#SBATCH --partition compute\njupyter lab\n")
+    _, issues = check_script(s, cfg)
+    assert any("interactive" in i.lower() and "login" in i for i in issues)
+
+
+def test_normal_batch_job_not_flagged_interactive(tmp_path):
+    s = _job(tmp_path, "#!/bin/bash\n#SBATCH --partition compute\n#SBATCH --mem 4G\npython train.py\n")
+    _, issues = check_script(s, _CFG)
+    assert not any("interactive" in i.lower() for i in issues)
+
+
 # --- MPI vs threaded detection -------------------------------------------
 
 def test_mpi_job_not_flagged_for_missing_cpus_per_task(libra_config):

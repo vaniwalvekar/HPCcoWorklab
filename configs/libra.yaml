@@ -54,3 +54,11 @@ progress_patterns:
 completion_markers:
   - '\b(done|finished|completed)\b'
   - 'exit code[: ]+0'
+
+# Optional (HPC-13, interactive-vs-batch detection in `hpclint check`).
+# interactive_markers overrides built-ins (jupyter/ipython/code-server/x11/--pty).
+# interactive_partitions lists the queue(s) suited to interactive work; while
+# empty, hpclint still flags interactive jobs but can't name the right queue.
+# Fill in once confirmed via `sinfo` (HPC-10), e.g. interactive_partitions: [login]
+# interactive_markers: ['\bjupyter\b']
+# interactive_partitions: []
