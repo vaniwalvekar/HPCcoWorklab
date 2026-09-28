@@ -51,9 +51,35 @@ def load_config(path):
         return yaml.safe_load(f)
 
 
+# Long --key <-> short -x equivalence for the options hpclint inspects.
+_SHORT_ALIASES = {
+    "partition": "p",
+    "nodes": "N",
+    "ntasks": "n",
+    "cpus-per-task": "c",
+    "account": "A",
+}
+
+
 def find_sbatch_value(content, key):
-    match = re.search(rf"#SBATCH\s+--{key}=(\S+)", content)
-    return match.group(1) if match else None
+    """Find a #SBATCH option value, accepting --key=val, --key val,
+    -x val and -xval (short aliases). Each #SBATCH line is read as argv-like
+    tokens, so a short '-p' can never match inside '--partition'."""
+    short = _SHORT_ALIASES.get(key)
+    for line_match in re.finditer(r"#SBATCH(.*)", content):
+        tokens = line_match.group(1).split()
+        for i, tok in enumerate(tokens):
+            if tok == f"--{key}" and i + 1 < len(tokens):
+                return tokens[i + 1]
+            if tok.startswith(f"--{key}="):
+                return tok.split("=", 1)[1]
+            if short:
+                if tok == f"-{short}" and i + 1 < len(tokens):
+                    return tokens[i + 1]
+                if (tok.startswith(f"-{short}") and not tok.startswith("--")
+                        and len(tok) > len(short) + 1):
+                    return tok[len(short) + 1:]
+    return None
 
 
 def parse_mem_to_gb(mem_str):
@@ -67,7 +93,28 @@ def parse_mem_to_gb(mem_str):
         return num / 1024
     elif unit == "K":
         return num / (1024 * 1024)
-    return num  # assume GB if no unit or 'G'
+    if unit == "":        # bare number: Slurm's default --mem unit is MB
+        return num / 1024
+    return num            # 'G'/'GB' -> gigabytes
+
+
+def parse_gpu_count(gpus_str):
+    """Number of GPUs requested, or None if unparseable.
+    Accepts '2', '0', 'a100:2' (type:count), '2:1' (count:per-node), or a
+    bare type name ('a100' -> 1)."""
+    if gpus_str is None:
+        return None
+    s = str(gpus_str).strip()
+    if not s:
+        return None
+    if s.isdigit():
+        return int(s)
+    if ":" in s:
+        for part in s.split(":"):
+            if part.isdigit():
+                return int(part)
+        return None
+    return 1
 
 
 def check_script(script_path, config):
@@ -131,11 +178,16 @@ def check_script(script_path, config):
         note = f" (use --gpus=0 on '{effective_partition}', which has no GPUs)" if not has_gpu else ""
         issues.append(f"No --gpus set. This cluster requires a GPU count on every job script{note}.")
     elif gpus is not None:
-        if not has_gpu and gpus != "0":
+        gpu_count = parse_gpu_count(gpus)
+        if gpu_count is None:
+            issues.append(
+                f"--gpus='{gpus}' isn't in a form hpclint can count; double-check the syntax."
+            )
+        elif not has_gpu and gpu_count != 0:
             issues.append(
                 f"Requested --gpus={gpus}, but '{effective_partition}' has no GPUs. Set --gpus=0 or use a GPU partition."
             )
-        elif has_gpu and gpu_max is not None and int(gpus) > gpu_max:
+        elif has_gpu and gpu_max is not None and gpu_count > gpu_max:
             issues.append(
                 f"Requested --gpus={gpus}, but '{effective_partition}' nodes only have {gpu_max} GPUs. Lower --gpus."
             )
