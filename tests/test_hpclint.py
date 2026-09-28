@@ -202,3 +202,49 @@ def test_valid_gpu_partition_uses_its_own_limits(libra_config):
 def test_home_dir_usage_flagged(libra_config):
     _, issues = check_script(fixture_path("home_dir_job.sh"), libra_config)
     assert any("slow storage path" in i for i in issues)
+
+
+# --- HPC-12: python environments on slow storage ---------------------------
+
+def _env_cfg():
+    return {
+        "cluster_name": "X",
+        "partitions": {"compute": {"is_default": True, "has_gpu": False,
+                                   "cpus_per_task_max": 8, "mem_gb_max": 64}},
+        "required_fields": [], "recommended_fields": [],
+        "slow_io_paths": [{"path_markers": ["/home/", "$HOME"], "recommend": "$SCRATCH"}],
+    }
+
+
+def _env_job(tmp_path, text):
+    p = tmp_path / "job.sh"
+    p.write_text(text)
+    return str(p)
+
+
+def _env_warnings(issues):
+    return [i for i in issues if "environment" in i.lower() and "slow" in i.lower()]
+
+
+def test_env_on_home_warned(tmp_path):
+    s = _env_job(tmp_path, "#!/bin/bash\n#SBATCH --partition compute\nsource $HOME/.venv/bin/activate\n")
+    _, issues = check_script(s, _env_cfg())
+    assert _env_warnings(issues)
+
+
+def test_env_on_scratch_not_warned(tmp_path):
+    s = _env_job(tmp_path, "#!/bin/bash\n#SBATCH --partition compute\nsource /scratch/u/.venv/bin/activate\n")
+    _, issues = check_script(s, _env_cfg())
+    assert not _env_warnings(issues)
+
+
+def test_bare_conda_activate_no_path_no_warning(tmp_path):
+    s = _env_job(tmp_path, "#!/bin/bash\n#SBATCH --partition compute\nconda activate myenv\n")
+    _, issues = check_script(s, _env_cfg())
+    assert not _env_warnings(issues)
+
+
+def test_miniconda_under_home_warned(tmp_path):
+    s = _env_job(tmp_path, "#!/bin/bash\n#SBATCH --partition compute\nconda activate $HOME/miniconda3/envs/ml\n")
+    _, issues = check_script(s, _env_cfg())
+    assert _env_warnings(issues)

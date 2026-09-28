@@ -62,3 +62,9 @@ completion_markers:
 # Fill in once confirmed via `sinfo` (HPC-10), e.g. interactive_partitions: [login]
 # interactive_markers: ['\bjupyter\b']
 # interactive_partitions: []
+
+# Optional (HPC-12, `hpclint check`): override the patterns used to spot a
+# Python environment path (defaults cover .venv/venv, .conda/envs, miniconda3,
+# anaconda3, bin/activate). An env path that also sits under a slow_io_paths
+# marker is flagged. Only explicit paths match, so `conda activate name` is safe.
+# env_path_patterns: ['[^\s]+bin/activate']

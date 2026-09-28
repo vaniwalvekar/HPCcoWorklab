@@ -134,6 +134,37 @@ def parse_gpu_count(gpus_str):
     return 1
 
 
+_DEFAULT_ENV_PATH_PATTERNS = [
+    r"[^\s'\"]+bin[/\\]activate",          # .../bin/activate
+    r"[^\s'\"]+\.conda[/\\]envs[/\\][^\s'\"]+",
+    r"[^\s'\"]+miniconda3[/\\][^\s'\"]+",
+    r"[^\s'\"]+anaconda3[/\\][^\s'\"]+",
+    r"[^\s'\"]+[/\\]\.venv\b",
+    r"[^\s'\"]+[/\\]venvs?[/\\][^\s'\"]+",
+]
+
+
+def find_envs_on_slow_paths(content, slow_markers, patterns=None):
+    """Return env activation paths in the script that live under a slow-storage
+    marker (HPC-12). Only explicit paths count, so a bare `conda activate name`
+    (whose location is unknown) is never a false positive."""
+    hits = []
+    seen = set()
+    for pat in (patterns or _DEFAULT_ENV_PATH_PATTERNS):
+        for m in re.finditer(pat, content):
+            p = m.group(0)
+            if p in seen:
+                continue
+            seen.add(p)
+            if any(sm and sm in p for sm in slow_markers):
+                hits.append(p)
+    # Drop a hit that is nested inside another (one venv matched by several
+    # patterns, e.g. '$HOME/.venv' inside '$HOME/.venv/bin/activate') so we
+    # report the environment once.
+    hits = [h for h in hits if not any(h != o and h in o for o in hits)]
+    return hits
+
+
 def check_script(script_path, config):
     content = read_script(script_path)
     issues = []
@@ -283,6 +314,17 @@ def check_script(script_path, config):
             issues.append(
                 f"Script references a slow storage path. Consider using {rule.get('recommend', 'a faster filesystem')} "
                 f"for data-intensive read/write instead."
+            )
+
+    # --- Python environments living on slow storage (HPC-12) ---
+    slow_markers = [m for rule in slow_io_paths for m in rule.get("path_markers", [])]
+    if slow_markers:
+        recommend = next((r.get("recommend", "a faster filesystem") for r in slow_io_paths),
+                         "a faster filesystem")
+        for env_path in find_envs_on_slow_paths(content, slow_markers, config.get("env_path_patterns")):
+            issues.append(
+                f"Python environment '{env_path}' lives on slow storage. Recreating it under "
+                f"{recommend} speeds up job startup (env resolution off $HOME) and eases home-quota pressure."
             )
 
     # --- Referenced file existence (best-effort; skips anything using a shell variable) ---
