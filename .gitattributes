@@ -1,0 +1,26 @@
+# Normalize line endings: keep LF in the repo and in working trees.
+* text=auto eol=lf
+
+# Source / docs / config (explicit for clarity)
+*.py   text eol=lf
+*.md   text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+*.toml text eol=lf
+*.cfg  text eol=lf
+*.txt  text eol=lf
+*.sh   text eol=lf
+
+# Environment-Modules files (no extension) are text scripts
+modulefiles/** text eol=lf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.whl binary
+*.gz  binary
+*.tar binary
