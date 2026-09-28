@@ -37,3 +37,20 @@ default_time_days: 7
 slow_io_paths:
   - path_markers: ["/home/", "$HOME"]
     recommend: "$SCRATCH"
+
+# Used by `hpclint watch --log <file>` (HPC-31) to detect real progress from
+# the job's log instead of relying only on file timestamps. Each pattern must
+# capture a monotonically-increasing counter in group 1. Optional total_regex
+# gives the denominator for a percentage / ETA. Omit to skip log detection.
+progress_patterns:
+  - regex: 'step\s+(\d+)'
+    total_regex: 'of\s+(\d+)'
+  - regex: 'iteration[: ]+(\d+)'
+  - regex: 'epoch[: ]+(\d+)'
+    total_regex: 'of\s+(\d+)'
+  - regex: '(\d+(?:\.\d+)?)\s*%'
+
+# Regexes that mean the run reached its natural end.
+completion_markers:
+  - '\b(done|finished|completed)\b'
+  - 'exit code[: ]+0'

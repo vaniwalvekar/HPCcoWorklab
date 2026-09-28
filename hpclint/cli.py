@@ -20,6 +20,7 @@ from .monitor import (
     check_output_activity,
     assess_job_health,
     health_exit_code,
+    read_log_progress,
 )
 from .diagnose import run_sacct, parse_sacct_line, diagnose, diagnose_exit_code
 from .slurm import SlurmCommandError
@@ -58,6 +59,27 @@ def _run_check(args):
         sys.exit(0)
 
 
+def _maybe_read_log(args):
+    log_path = getattr(args, "log", None)
+    if not log_path:
+        return None
+    patterns = completion = None
+    cfg_path = getattr(args, "config", None)
+    if cfg_path:
+        try:
+            cfg = load_config(cfg_path) or {}
+            patterns = cfg.get("progress_patterns")
+            completion = cfg.get("completion_markers")
+        except FileNotFoundError:
+            pass
+    info = read_log_progress(log_path, patterns=patterns, completion_markers=completion,
+                             stale_after_minutes=args.stale_minutes)
+    if info.get("available") and not info.get("has_markers"):
+        suffix = "" if patterns else " (no progress_patterns in config)"
+        print(f"note: no progress markers found in the log{suffix} - using the directory check\n")
+    return info
+
+
 def _run_watch(args):
     squeue_raw = run_squeue(args.jobid)
     squeue_info = parse_squeue_line(squeue_raw)
@@ -86,8 +108,9 @@ def _run_watch(args):
               f"({activity_info['most_recent_file']})")
 
     print()
-    print(assess_job_health(squeue_info, activity_info, sstat_info))
-    return health_exit_code(squeue_info, activity_info, sstat_info)
+    log_info = _maybe_read_log(args)
+    print(assess_job_health(squeue_info, activity_info, sstat_info, log_info))
+    return health_exit_code(squeue_info, activity_info, sstat_info, log_info)
 
 
 def _run_diagnose(args):
@@ -118,6 +141,9 @@ def main():
     watch_parser.add_argument("--output-dir", required=True, help="Directory the job writes output to")
     watch_parser.add_argument("--stale-minutes", type=int, default=30,
                                help="Minutes of no file activity before flagging as stale (default: 30)")
+    watch_parser.add_argument("--log", help="Path to the job's stdout/stderr log, to detect real progress (HPC-31)")
+    watch_parser.add_argument("--config", default=os.environ.get("HPCLINT_DEFAULT_CONFIG"),
+                              help="Cluster/app config providing progress_patterns/completion_markers (used with --log)")
 
     diagnose_parser = subparsers.add_parser("diagnose", help="Explain why a finished job failed (or didn't)")
     diagnose_parser.add_argument("jobid", help="Slurm job ID to diagnose")

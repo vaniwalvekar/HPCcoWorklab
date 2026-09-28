@@ -12,6 +12,7 @@ and only the wrapper needs a real cluster to exercise.
 """
 
 import os
+import re
 import time
 
 from .slurm import run_slurm
@@ -153,6 +154,111 @@ def check_output_activity(output_dir, stale_after_minutes=30):
     }
 
 
+# --- Log-content progress detection (HPC-31) --------------------------------
+
+def _format_eta(seconds):
+    if seconds is None:
+        return "unknown"
+    seconds = int(seconds)
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f"{h}h{m:02d}m"
+    if m:
+        return f"{m}m{s:02d}s"
+    return f"{s}s"
+
+
+def _last_progress(text, patterns):
+    """Return (value, total) from the first configured pattern that matches,
+    using the LAST occurrence in the log. (None, None) if nothing matches.
+    Patterns are dicts like {'regex': ..., 'total_regex': ...}; group 1 is the
+    progress counter."""
+    for p in (patterns or []):
+        rx = p.get("regex")
+        if not rx:
+            continue
+        last = None
+        for m in re.finditer(rx, text, re.IGNORECASE):
+            last = m
+        if last is None:
+            continue
+        try:
+            value = float(last.group(1))
+        except (IndexError, TypeError, ValueError):
+            continue
+        total = None
+        total_rx = p.get("total_regex")
+        if total_rx:
+            tlast = None
+            for tm in re.finditer(total_rx, text, re.IGNORECASE):
+                tlast = tm
+            if tlast is not None:
+                try:
+                    total = float(tlast.group(1))
+                except (IndexError, TypeError, ValueError):
+                    total = None
+        return value, total
+    return None, None
+
+
+def read_log_progress(path, patterns=None, completion_markers=None,
+                      stale_after_minutes=30, sample_seconds=0):
+    """Read a job's log file and derive real progress signals (HPC-31).
+
+    `patterns` (from cluster/app config) each capture a monotonically
+    increasing progress counter in group 1; `completion_markers` are regexes
+    meaning the job finished. The log's mtime is used as "last advance".
+    Optionally re-sample `sample_seconds` later to derive rate + ETA.
+    With no patterns configured, has_markers stays False so callers fall back
+    to the directory-activity check.
+    """
+    info = {
+        "available": False, "has_markers": False, "latest": None, "total": None,
+        "percent": None, "finished": False, "minutes_since_write": None,
+        "stalled": None, "rate_per_min": None, "eta_seconds": None,
+    }
+    if not path or not os.path.isfile(path):
+        return info
+    try:
+        with open(path, "r", errors="replace") as f:
+            text = f.read()
+    except OSError:
+        return info
+
+    info["available"] = True
+    info["minutes_since_write"] = (time.time() - os.path.getmtime(path)) / 60
+    info["stalled"] = info["minutes_since_write"] > stale_after_minutes
+
+    for marker in (completion_markers or []):
+        if re.search(marker, text, re.IGNORECASE):
+            info["finished"] = True
+            break
+
+    value, total = _last_progress(text, patterns)
+    info["has_markers"] = value is not None
+    info["latest"] = value
+    info["total"] = total
+    if total:
+        info["percent"] = (value / total * 100) if value is not None else None
+
+    if sample_seconds and sample_seconds > 0 and value is not None:
+        time.sleep(sample_seconds)
+        try:
+            with open(path, "r", errors="replace") as f2:
+                text2 = f2.read()
+        except OSError:
+            text2 = ""
+        value2, _ = _last_progress(text2, patterns)
+        if value2 is not None and value2 != value:
+            rate = (value2 - value) / (sample_seconds / 60.0)
+            info["rate_per_min"] = rate
+            if total is not None and rate > 0:
+                info["eta_seconds"] = (total - value2) / rate * 60
+
+    return info
+
+
 # --- Combined health verdict ------------------------------------------------
 
 def _parse_cpu_time_to_seconds(time_str):
@@ -183,7 +289,42 @@ def _parse_cpu_time_to_seconds(time_str):
     return days * 86400 + hours * 3600 + minutes * 60 + seconds
 
 
-def assess_job_health(squeue_info, activity_info, sstat_info=None, high_cpu_time_threshold_seconds=60):
+def _log_based_verdict(squeue_info, log_info, has_accrued_cpu_time, cpu_known):
+    latest = log_info.get("latest")
+    total = log_info.get("total")
+    prog = ""
+    if latest is not None:
+        prog = f"{latest:g}" + (f"/{total:g}" if total else "")
+    if log_info.get("finished"):
+        return (
+            "Job's log shows its completion marker - it appears to have finished. "
+            "Confirm the final state with `hpclint diagnose`."
+        )
+    mins = log_info.get("minutes_since_write")
+    mins_str = f"{mins:.0f}" if mins is not None else "an unknown number of"
+    if log_info.get("stalled"):
+        if has_accrued_cpu_time:
+            return (
+                f"Job's log last reached {prog} but has not advanced in {mins_str} minutes while "
+                f"still using CPU - likely spinning in a loop or hung after its last reported step. "
+                f"Worth checking directly."
+            )
+        return (
+            f"Job's log last reached {prog} and has not advanced recently, and it is using little "
+            f"CPU - likely blocked or waiting on something rather than working."
+        )
+    extra = ""
+    if log_info.get("rate_per_min") is not None:
+        extra = f" (about {log_info['rate_per_min']:g}/min"
+        if log_info.get("eta_seconds") is not None:
+            extra += f", ETA ~{_format_eta(log_info['eta_seconds'])}"
+        extra += ")"
+    return (
+        f"Job's log is actively advancing (last at {prog}){extra}. Looks like it's making real progress."
+    )
+
+
+def assess_job_health(squeue_info, activity_info, sstat_info=None, log_info=None, high_cpu_time_threshold_seconds=60):
     """Combine job state, CPU time accrued, and output-directory activity
     into a plain-language verdict.
 
@@ -213,6 +354,9 @@ def assess_job_health(squeue_info, activity_info, sstat_info=None, high_cpu_time
         # No CPU stats yet (e.g. job just started) - fall back to elapsed time.
         has_accrued_cpu_time = wall_seconds is not None and wall_seconds >= high_cpu_time_threshold_seconds
         cpu_known = False
+
+    if log_info and log_info.get("has_markers"):
+        return _log_based_verdict(squeue_info, log_info, has_accrued_cpu_time, cpu_known)
 
     if not activity_info.get("exists"):
         return (
@@ -265,7 +409,7 @@ def assess_job_health(squeue_info, activity_info, sstat_info=None, high_cpu_time
     return "Job is RUNNING and the output directory is being actively updated. Looks healthy."
 
 
-def health_exit_code(squeue_info, activity_info, sstat_info=None, high_cpu_time_threshold_seconds=60):
+def health_exit_code(squeue_info, activity_info, sstat_info=None, log_info=None, high_cpu_time_threshold_seconds=60):
     """Process exit code for a watch verdict, mirroring assess_job_health:
 
         0 = nothing concerning (healthy / starting up / not running / too early)
@@ -290,6 +434,11 @@ def health_exit_code(squeue_info, activity_info, sstat_info=None, high_cpu_time_
     else:
         busy = wall_seconds is not None and wall_seconds >= high_cpu_time_threshold_seconds
         cpu_known = False
+
+    if log_info and log_info.get("has_markers"):
+        if log_info.get("finished"):
+            return 0
+        return 1 if log_info.get("stalled") else 0
 
     if not activity_info.get("exists"):
         return 0

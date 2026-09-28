@@ -21,3 +21,11 @@ default_time_days: 3
 slow_io_paths:
   - path_markers: ["/nfs_home/"]
     recommend: "/fastscratch"
+
+progress_patterns:
+  - regex: 'step\s+(\d+)'
+    total_regex: 'of\s+(\d+)'
+  - regex: '(\d+(?:\.\d+)?)\s*%'
+
+completion_markers:
+  - '\b(done|finished|completed)\b'
