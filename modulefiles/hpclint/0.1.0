@@ -1,13 +1,4 @@
 #%Module1.0
-##
-## hpclint modulefile — draft for personal testing on Libra, before
-## proposing a central install to DST.
-##
-## This assumes hpclint is installed into a dedicated virtual environment
-## rather than system-wide, since a personal module shouldn't touch shared
-## Python packages. Adjust HPCLINT_HOME below to wherever you actually
-## install it (e.g. $HOME/.local/hpclint-venv).
-##
 
 proc ModulesHelp { } {
     puts stderr "hpclint - a cluster-agnostic linter for Slurm job scripts."
@@ -18,12 +9,8 @@ proc ModulesHelp { } {
 
 module-whatis "hpclint: pre-submission and live-monitoring checks for Slurm job scripts"
 
-# --- Adjust this to your actual install location ---
 set HPCLINT_HOME "$::env(HOME)/.local/hpclint-venv"
 
 prepend-path PATH "$HPCLINT_HOME/bin"
 
-# Points hpclint at Libra's own cluster config by default, so users on
-# Libra don't need to pass --config every time. (Requires cli.py to grow
-# a default-config lookup — see modulefiles/README.md for the follow-up.)
 setenv HPCLINT_DEFAULT_CONFIG "$HPCLINT_HOME/configs/libra.yaml"
