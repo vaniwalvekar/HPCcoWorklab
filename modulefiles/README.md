@@ -28,11 +28,3 @@ This is a personal-testing draft, not a DST-supported install yet.
    hpclint check some_script.sh
    ```
 
-## Next steps toward a real central install
-
-- Confirm with DST whether Libra uses Environment Modules or Lmod (this
-  file is written to work with either)
-- Package this as a proper shared install (not a personal venv) if DST
-  wants to support it centrally
-- Bundle Libra's config file with the install so every user gets it by
-  default, without a manual copy step
