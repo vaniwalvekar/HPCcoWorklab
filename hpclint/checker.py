@@ -98,6 +98,23 @@ def parse_mem_to_gb(mem_str):
     return num            # 'G'/'GB' -> gigabytes
 
 
+_DEFAULT_INTERACTIVE_MARKERS = [
+    r"\bjupyter\b", r"\bipython\b", r"\bcode-server\b", r"\bvscode\b",
+    r"\bx11\b", r"--pty",
+]
+
+
+def detect_interactive(content, markers=None):
+    """Return the first interactive marker found in the script (HPC-13),
+    or None. Markers are regexes; defaults cover Jupyter/IPython/code-server/
+    VS Code/X11/--pty. A cluster can override via config `interactive_markers`."""
+    for m in (markers or _DEFAULT_INTERACTIVE_MARKERS):
+        mo = re.search(m, content, re.IGNORECASE)
+        if mo:
+            return mo.group(0)
+    return None
+
+
 def parse_gpu_count(gpus_str):
     """Number of GPUs requested, or None if unparseable.
     Accepts '2', '0', 'a100:2' (type:count), '2:1' (count:per-node), or a
@@ -243,6 +260,23 @@ def check_script(script_path, config):
             f"No --time set. This cluster defaults to a {default_time_days}-day walltime if omitted — "
             f"fine for short jobs, but set it explicitly for anything you want the scheduler to plan around."
         )
+
+    interactive_marker = detect_interactive(content, config.get("interactive_markers"))
+    if interactive_marker:
+        interactive_partitions = config.get("interactive_partitions", [])
+        if interactive_partitions and effective_partition not in interactive_partitions:
+            issues.append(
+                f"This looks like an interactive session (matched '{interactive_marker}'), but it's "
+                f"targeting partition '{effective_partition}'. Interactive work usually needs a "
+                f"login/interactive queue ({', '.join(interactive_partitions)}) or `srun --pty`, "
+                f"not a batch partition."
+            )
+        else:
+            issues.append(
+                f"This looks like an interactive session (matched '{interactive_marker}'). Interactive "
+                f"work typically runs via `srun --pty` or an interactive queue; as a batch job it may "
+                f"idle and waste your walltime allocation."
+            )
 
     for rule in slow_io_paths:
         if any(marker in content for marker in rule.get("path_markers", [])):
