@@ -48,8 +48,55 @@ def test_mem_parses_tb_and_t_the_same():
     assert parse_mem_to_gb("2TB") == parse_mem_to_gb("2T") == 2048
 
 
-def test_mem_no_unit_assumes_gb():
-    assert parse_mem_to_gb("1200") == 1200
+def test_mem_no_unit_is_mb():
+    # Slurm treats a bare --mem value as MEGABYTES, not GB.
+    assert parse_mem_to_gb("1200") == pytest.approx(1200 / 1024)
+    assert parse_mem_to_gb("8000") == pytest.approx(7.8125)
+
+
+# --- HPC-34: directive + GPU-spec parsing robustness ----------------------
+
+from hpclint.checker import find_sbatch_value, parse_gpu_count
+
+
+def test_find_sbatch_value_space_form():
+    assert find_sbatch_value("#SBATCH --nodes 2", "nodes") == "2"
+
+
+def test_find_sbatch_value_equals_form_still_works():
+    assert find_sbatch_value("#SBATCH --nodes=3", "nodes") == "3"
+
+
+def test_find_sbatch_value_short_option():
+    assert find_sbatch_value("#SBATCH -N 2", "nodes") == "2"
+    assert find_sbatch_value("#SBATCH -p gpu", "partition") == "gpu"
+
+
+def test_find_sbatch_value_bundled_short_option():
+    assert find_sbatch_value("#SBATCH -N2", "nodes") == "2"
+
+
+def test_find_sbatch_value_short_not_confused_with_long():
+    # -p must not accidentally match the 'p' inside '--partition'
+    assert find_sbatch_value("#SBATCH --partition=compute", "partition") == "compute"
+
+
+def test_parse_gpu_count_plain():
+    assert parse_gpu_count("2") == 2
+    assert parse_gpu_count("0") == 0
+
+
+def test_parse_gpu_count_name_colon():
+    assert parse_gpu_count("a100:2") == 2
+    assert parse_gpu_count("gpu:4") == 4
+
+
+def test_parse_gpu_count_bare_name_is_one():
+    assert parse_gpu_count("a100") == 1
+
+
+def test_parse_gpu_count_unparseable_is_none():
+    assert parse_gpu_count("garbage:xyz") is None
 
 
 # --- MPI vs threaded detection -------------------------------------------
