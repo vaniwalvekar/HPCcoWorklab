@@ -307,3 +307,26 @@ def test_exit_code_matches_verdict_for_busy_but_silent():
     act = {"exists": True, "stale": True, "file_count": 1, "minutes_since_change": 120}
     verdict = assess_job_health(q, act, {"ave_cpu": "05:00:00"})
     assert "busy-but-silent" in verdict and health_exit_code(q, act, {"ave_cpu": "05:00:00"}) == 1
+
+
+# --- HPC-14: queue position -------------------------------------------------
+
+def test_parse_pending_ids():
+    from hpclint.monitor import parse_pending_ids
+    assert parse_pending_ids("10\n11\n\n12\n") == ["10", "11", "12"]
+    assert parse_pending_ids("") == []
+
+
+def test_compute_queue_position_exact():
+    from hpclint.monitor import compute_queue_position
+    assert compute_queue_position(["10", "11", "12"], "11") == 2
+
+
+def test_compute_queue_position_array_parent():
+    from hpclint.monitor import compute_queue_position
+    assert compute_queue_position(["5_0", "5_1", "9"], "5") == 1
+
+
+def test_compute_queue_position_missing():
+    from hpclint.monitor import compute_queue_position
+    assert compute_queue_position(["1", "2"], "99") is None
