@@ -68,3 +68,12 @@ completion_markers:
 # anaconda3, bin/activate). An env path that also sits under a slow_io_paths
 # marker is flagged. Only explicit paths match, so `conda activate name` is safe.
 # env_path_patterns: ['[^\s]+bin/activate']
+
+# Optional (HPC-28): walltime above which `check` nudges you to add checkpointing.
+# checkpoint_time_threshold_hours: 24
+
+# Optional (HPC-22, `check`): map software seen in a script to suggested
+# `module load` names. Fully cluster-owned so hpclint hardcodes nothing. e.g.:
+# software_map:
+#   gromacs: {match: ['gmx(_mpi)?\b', 'gromacs'], modules: ['GROMACS']}
+#   pytorch: {match: ['\btorch\b', 'import torch'], modules: ['pytorch-cuda']}

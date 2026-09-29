@@ -165,9 +165,132 @@ def find_envs_on_slow_paths(content, slow_markers, patterns=None):
     return hits
 
 
+def _time_str_to_seconds(time_str):
+    """Parse Slurm MM:SS / HH:MM:SS / D-HH:MM:SS to seconds; None if invalid."""
+    if not time_str:
+        return None
+    s = str(time_str).strip()
+    days = 0
+    if "-" in s:
+        dpart, _, s = s.partition("-")
+        try:
+            days = int(dpart)
+        except ValueError:
+            return None
+    parts = s.split(":")
+    try:
+        nums = [int(p) for p in parts]
+    except ValueError:
+        return None
+    while len(nums) < 3:
+        nums.insert(0, 0)
+    h, m, sec = nums[-3:]
+    return days * 86400 + h * 3600 + m * 60 + sec
+
+
+def _fmt_duration(seconds):
+    if seconds >= 86400:
+        return f"{seconds // 86400}d {(seconds % 86400) // 3600}h"
+    if seconds >= 3600:
+        return f"{seconds // 3600}h"
+    return f"{seconds // 60}m"
+
+
+_CONTAINER_CMD_RE = re.compile(r"\b(?:apptainer|singularity)\b")
+_CHECKPOINT_RE = re.compile(
+    r"\b(checkpoint|checkpointing|c3radical|crac|restart|resume|snapshot|save[-_ ]?interval)\b",
+    re.IGNORECASE,
+)
+
+
+def check_containers(content, script_dir):
+    """HPC-27: verify apptainer/singularity image files and --bind host paths
+    exist. Only literal paths are checked - anything with a shell variable is
+    skipped because its value isn't known until the job actually runs."""
+    issues = []
+    if not _CONTAINER_CMD_RE.search(content):
+        return issues
+    seen = set()
+    for m in re.finditer(r"([^\s'\"]+\.(?:sif|squashfs|img))\b", content):
+        img = m.group(1)
+        if "$" in img or img in seen:
+            continue
+        seen.add(img)
+        resolved = img if os.path.isabs(img) else os.path.join(script_dir, img)
+        if not os.path.exists(resolved):
+            issues.append(
+                f"Container image '{img}' (used with apptainer/singularity) was not found at "
+                f"'{resolved}' - the job will fail when it tries to launch it."
+            )
+    for m in re.finditer(r"(?:--bind|-B)[= ]([^\s'\"]+)", content):
+        for pair in m.group(1).split(","):
+            src = pair.split(":")[0]
+            if not src or "$" in src:
+                continue
+            resolved = src if os.path.isabs(src) else os.path.join(script_dir, src)
+            if not os.path.exists(resolved):
+                issues.append(
+                    f"Container bind path '{src}' does not exist; --bind will fail or mount nothing."
+                )
+    return issues
+
+
+def recommend_checkpointing(time_limit, content, threshold_hours=24):
+    """HPC-28: a long walltime with no checkpoint/restart logic is a real risk."""
+    secs = _time_str_to_seconds(time_limit)
+    if secs is None or secs < threshold_hours * 3600:
+        return None
+    if _CHECKPOINT_RE.search(content):
+        return None
+    return (
+        f"--time requests {_fmt_duration(secs)} with no checkpoint/restart logic detected. For a job "
+        f"this long, a preemption or node failure loses all progress - consider periodic checkpointing."
+    )
+
+
+def recommend_modules(content, software_map):
+    """HPC-22: map detected software usage to suggested module loads. Fully
+    config-driven (software_map), so no library names are hardcoded in the tool."""
+    recs = []
+    for name, spec in (software_map or {}).items():
+        if isinstance(spec, dict):
+            pats = spec.get("match") or [name]
+            mods = spec.get("modules") or []
+        else:
+            pats, mods = [name], [spec]
+        if isinstance(pats, str):
+            pats = [pats]
+        if isinstance(mods, str):
+            mods = [mods]
+        try:
+            if re.search("|".join(pats), content, re.IGNORECASE):
+                recs.append((name, mods))
+        except re.error:
+            continue
+    return recs
+
+
+def recommend_partitions(config, gpu_count, mem_gb):
+    """HPC-23: partition names that can actually satisfy the request."""
+    out = []
+    for name, spec in (config.get("partitions") or {}).items():
+        if gpu_count and gpu_count > 0:
+            if not spec.get("has_gpu"):
+                continue
+            gmax = spec.get("gpu_max")
+            if gmax is not None and gpu_count > gmax:
+                continue
+        mem_max = spec.get("mem_gb_max")
+        if mem_gb is not None and mem_max is not None and mem_gb > mem_max:
+            continue
+        out.append(name)
+    return out
+
+
 def check_script(script_path, config):
     content = read_script(script_path)
     issues = []
+    script_dir = os.path.dirname(os.path.abspath(script_path))
 
     partitions = config.get("partitions", {})
     valid_partitions = set(partitions.keys())
@@ -327,8 +450,34 @@ def check_script(script_path, config):
                 f"{recommend} speeds up job startup (env resolution off $HOME) and eases home-quota pressure."
             )
 
+    # --- Containers: apptainer/singularity image + bind paths (HPC-27) ---
+    issues.extend(check_containers(content, script_dir))
+
+    # --- Checkpointing nudge for long walltimes (HPC-28) ---
+    _ck = recommend_checkpointing(time_limit, content,
+                                  config.get("checkpoint_time_threshold_hours", 24))
+    if _ck:
+        issues.append(_ck)
+
+    # --- Software -> module-load recommendations (HPC-22) ---
+    for _name, _mods in recommend_modules(content, config.get("software_map")):
+        if _mods:
+            issues.append(
+                f"Detected '{_name}' usage - consider `module load {' '.join(_mods)}` "
+                f"(verify with `module avail {_name}`)."
+            )
+
+    # --- Partition recommendation when none/invalid given (HPC-23) ---
+    if partition is None or partition not in valid_partitions:
+        _cands = recommend_partitions(
+            config, parse_gpu_count(gpus), parse_mem_to_gb(mem) if mem else None)
+        if _cands:
+            issues.append(
+                "No usable --partition set; based on your resource request, suitable "
+                f"partition(s): {', '.join(sorted(_cands))}."
+            )
+
     # --- Referenced file existence (best-effort; skips anything using a shell variable) ---
-    script_dir = os.path.dirname(os.path.abspath(script_path))
     for ref, resolved in find_referenced_files(content, script_dir):
         issues.append(
             f"Script references '{ref}', but no file was found at '{resolved}'. "
