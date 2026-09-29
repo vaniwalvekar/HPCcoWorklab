@@ -287,6 +287,56 @@ def recommend_partitions(config, gpu_count, mem_gb):
     return out
 
 
+def check_array_usage(content):
+    """HPC-30: sanity-check an `--array` request. Catches a malformed spec and
+    the common bug where an array is requested but the task index is never
+    used (so every task would run identical work)."""
+    arr = find_sbatch_value(content, "array")
+    if arr is None:
+        return []
+    issues = []
+    spec = arr.split("%", 1)[0]          # drop %max for validation
+    if not re.fullmatch(r"[\d][\d,\-]*(:\d+)?", spec):
+        issues.append(
+            f"--array='{arr}' doesn't look like a valid Slurm array spec "
+            f"(expected e.g. 1-100, 1-100:2, or 1-100%4)."
+        )
+    if not re.search(r"SLURM_ARRAY_TASK_ID|SLURM_ARRAY_JOB_ID|SLURM_ARRAY_TASK_COUNT", content):
+        issues.append(
+            "--array is set, but the script never references $SLURM_ARRAY_TASK_ID, so every task "
+            "would run identical work. Usually a copy/paste mistake - use the index to pick inputs."
+        )
+    return issues
+
+
+def _loaded_modules(content):
+    toks = []
+    for m in re.finditer(r"\bmodule\s+(?:load|add)\s+(.+)", content):
+        line = m.group(1).split("#")[0]      # ignore trailing comments
+        for t in re.split(r"\s+", line.strip()):
+            if t:
+                toks.append(t.lower())
+    return toks
+
+
+def check_conflicting_modules(content, conflicting_groups):
+    """HPC-42: flag when two modules known to be mutually exclusive on this
+    cluster are loaded together. Entirely config-driven (conflicting_groups) -
+    hpclint hardcodes nothing. A group is a list of module-name substrings."""
+    issues = []
+    toks = _loaded_modules(content)
+    if not toks:
+        return issues
+    for group in (conflicting_groups or []):
+        present = sorted({g.lower() for g in group if any(g.lower() in t for t in toks)})
+        if len(present) >= 2:
+            issues.append(
+                f"Modules that conflict on this cluster are both loaded: {present}. "
+                f"This often causes link/runtime symbol errors. Load only one (or swap between them)."
+            )
+    return issues
+
+
 def check_script(script_path, config):
     content = read_script(script_path)
     issues = []
@@ -476,6 +526,12 @@ def check_script(script_path, config):
                 "No usable --partition set; based on your resource request, suitable "
                 f"partition(s): {', '.join(sorted(_cands))}."
             )
+
+    # --- Job array usage sanity (HPC-30) ---
+    issues.extend(check_array_usage(content))
+
+    # --- Conflicting module loads (HPC-42) ---
+    issues.extend(check_conflicting_modules(content, config.get("conflicting_modules")))
 
     # --- Referenced file existence (best-effort; skips anything using a shell variable) ---
     for ref, resolved in find_referenced_files(content, script_dir):

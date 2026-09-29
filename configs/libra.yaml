@@ -77,3 +77,10 @@ completion_markers:
 # software_map:
 #   gromacs: {match: ['gmx(_mpi)?\b', 'gromacs'], modules: ['GROMACS']}
 #   pytorch: {match: ['\btorch\b', 'import torch'], modules: ['pytorch-cuda']}
+
+# Optional (HPC-42): groups of module names that are mutually exclusive on this
+# cluster; if `check` sees two loaded together it warns. Cluster-owned so the
+# tool hardcodes nothing. e.g.:
+# conflicting_modules:
+#   - ['cuda/11', 'cuda/12']
+#   - ['gcc/9', 'gcc/11', 'gcc/12']

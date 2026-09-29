@@ -60,6 +60,7 @@ from hpclint.checker import (
     find_sbatch_value, parse_gpu_count,
     recommend_checkpointing, recommend_modules, recommend_partitions,
     check_containers, _time_str_to_seconds,
+    check_array_usage, check_conflicting_modules,
 )
 
 
@@ -327,3 +328,50 @@ def test_check_checkpoint_nudge_in_output(tmp_path):
     s = _job(tmp_path, "#!/bin/bash\n#SBATCH --partition compute\n#SBATCH --time 48:00:00\npython train.py\n")
     _, issues = check_script(s, _CFG)
     assert any("checkpoint" in i.lower() for i in issues)
+
+
+# --- Batch 2 (HPC-30 array / HPC-42 conflicting modules) -------------------
+
+def test_array_without_task_id_flagged():
+    issues = check_array_usage("#SBATCH --array=1-100\npython run.py")
+    assert any("SLURM_ARRAY_TASK_ID" in i for i in issues)
+
+
+def test_array_with_task_id_ok():
+    issues = check_array_usage("#SBATCH --array=1-100\npython run.py --id $SLURM_ARRAY_TASK_ID")
+    assert not any("task id" in i.lower() or "SLURM_ARRAY_TASK_ID" in i for i in issues)
+
+
+def test_array_malformed_flagged():
+    issues = check_array_usage("#SBATCH --array=abc\npython run.py $SLURM_ARRAY_TASK_ID")
+    assert any("valid Slurm array" in i for i in issues)
+
+
+def test_array_no_array_no_output():
+    assert check_array_usage("#SBATCH --partition compute\npython run.py") == []
+
+
+def test_array_with_max_percent_valid():
+    issues = check_array_usage("#SBATCH --array=1-1000%8\nfor f in data/$SLURM_ARRAY_TASK_ID/*; do run $f; done")
+    assert issues == []
+
+
+def test_conflicting_modules_detected():
+    cfg_groups = [["cuda/11", "cuda/12"]]
+    issues = check_conflicting_modules("module load cuda/11 hdf5\nmodule load cuda/12", cfg_groups)
+    assert issues and "cuda/11" in issues[0] and "cuda/12" in issues[0]
+
+
+def test_conflicting_modules_single_load_ok():
+    assert check_conflicting_modules("module load cuda/12", [["cuda/11", "cuda/12"]]) == []
+
+
+def test_conflicting_modules_empty_config_noop():
+    assert check_conflicting_modules("module load cuda/11 cuda/12", []) == []
+
+
+def test_check_conflicting_integration(tmp_path):
+    cfg = dict(_CFG); cfg["conflicting_modules"] = [["gcc/9", "gcc/12"]]
+    s = _job(tmp_path, "#!/bin/bash\n#SBATCH --partition compute\nmodule load gcc/9\ngcc --version\nmodule load gcc/12\n")
+    _, issues = check_script(s, cfg)
+    assert any("conflict" in i.lower() for i in issues)
