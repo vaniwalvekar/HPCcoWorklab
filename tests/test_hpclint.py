@@ -56,7 +56,11 @@ def test_mem_no_unit_is_mb():
 
 # --- HPC-34: directive + GPU-spec parsing robustness ----------------------
 
-from hpclint.checker import find_sbatch_value, parse_gpu_count
+from hpclint.checker import (
+    find_sbatch_value, parse_gpu_count,
+    recommend_checkpointing, recommend_modules, recommend_partitions,
+    check_containers, _time_str_to_seconds,
+)
 
 
 def test_find_sbatch_value_space_form():
@@ -248,3 +252,78 @@ def test_miniconda_under_home_warned(tmp_path):
     s = _env_job(tmp_path, "#!/bin/bash\n#SBATCH --partition compute\nconda activate $HOME/miniconda3/envs/ml\n")
     _, issues = check_script(s, _env_cfg())
     assert _env_warnings(issues)
+
+
+# --- Batch 1 (HPC-22/23/27/28) ---------------------------------------------
+
+def test_time_str_to_seconds_forms():
+    assert _time_str_to_seconds("01:00:00") == 3600
+    assert _time_str_to_seconds("1-00:00:00") == 86400
+    assert _time_str_to_seconds("30:00") == 1800
+    assert _time_str_to_seconds("bogus") is None
+
+
+def test_checkpoint_nudge_long_no_marker():
+    assert recommend_checkpointing("48:00:00", "python train.py")
+
+
+def test_checkpoint_none_short():
+    assert recommend_checkpointing("01:00:00", "python train.py") is None
+
+
+def test_checkpoint_none_when_present():
+    assert recommend_checkpointing("48:00:00", "python train.py --checkpoint ckpt.pt") is None
+
+
+def test_recommend_modules_config_driven():
+    sm = {"gromacs": {"match": [r"\bgmx(_mpi)?\b"], "modules": ["GROMACS"]}}
+    assert recommend_modules("gmx_mpi mdrun -s top.tpr", sm) == [("gromacs", ["GROMACS"])]
+    assert recommend_modules("python x.py", sm) == []
+    assert recommend_modules("anything", {}) == []
+
+
+def test_recommend_partitions():
+    cfg = {"partitions": {"compute": {"has_gpu": False, "mem_gb_max": 1024},
+                          "gpu": {"has_gpu": True, "gpu_max": 2, "mem_gb_max": 512}}}
+    assert recommend_partitions(cfg, 2, 100) == ["gpu"]
+    assert sorted(recommend_partitions(cfg, 0, 100)) == ["compute", "gpu"]
+    assert recommend_partitions(cfg, 8, 100) == []      # no partition has 8 GPUs
+    assert recommend_partitions(cfg, 0, 4096) == []     # mem exceeds all nodes
+
+
+def test_check_containers_missing_image(tmp_path):
+    issues = check_containers("apptainer run /no/such/img.sif\n", str(tmp_path))
+    assert any("Container image" in i for i in issues)
+
+
+def test_check_containers_existing_image(tmp_path):
+    img = tmp_path / "app.sif"; img.write_text("x")
+    issues = check_containers(f"apptainer run {img} data\n", str(tmp_path))
+    assert not any("Container image" in i for i in issues)
+
+
+def test_check_containers_bind_missing(tmp_path):
+    issues = check_containers("singularity exec --bind /definitely/missing:/data img.sif\n", str(tmp_path))
+    assert any("bind path" in i for i in issues)
+
+
+def test_check_containers_skips_variable_paths():
+    # $SCRATCH etc. are unknown until run; must NOT be flagged as missing.
+    issues = check_containers("apptainer run --bind $SCRATCH/data:/data $IMAGES/app.sif\n", "/x")
+    assert issues == []
+
+
+def test_check_partition_recommendation_when_missing(tmp_path):
+    cfg = {"cluster_name": "X",
+           "partitions": {"compute": {"is_default": True, "has_gpu": False, "cpus_per_task_max": 8, "mem_gb_max": 64},
+                          "gpu": {"is_default": False, "has_gpu": True, "gpu_max": 2, "cpus_per_task_max": 8, "mem_gb_max": 64}},
+           "required_fields": [], "recommended_fields": []}
+    s = _job(tmp_path, "#!/bin/bash\n#SBATCH --gpus=2\n#SBATCH --mem=16G\n#SBATCH --time 01:00:00\npython t.py\n")
+    _, issues = check_script(s, cfg)
+    assert any("partition" in i.lower() and "gpu" in i for i in issues)
+
+
+def test_check_checkpoint_nudge_in_output(tmp_path):
+    s = _job(tmp_path, "#!/bin/bash\n#SBATCH --partition compute\n#SBATCH --time 48:00:00\npython train.py\n")
+    _, issues = check_script(s, _CFG)
+    assert any("checkpoint" in i.lower() for i in issues)
