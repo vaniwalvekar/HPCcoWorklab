@@ -21,8 +21,11 @@ from .monitor import (
     assess_job_health,
     health_exit_code,
     read_log_progress,
+    run_squeue_pending_ids,
+    compute_queue_position,
 )
 from .diagnose import run_sacct, parse_sacct_line, diagnose, diagnose_exit_code
+from .advisor import suggest_submission
 from .slurm import SlurmCommandError
 
 
@@ -73,7 +76,8 @@ def _maybe_read_log(args):
         except FileNotFoundError:
             pass
     info = read_log_progress(log_path, patterns=patterns, completion_markers=completion,
-                             stale_after_minutes=args.stale_minutes)
+                             stale_after_minutes=args.stale_minutes,
+                             sample_seconds=getattr(args, "sample_seconds", 0))
     if info.get("available") and not info.get("has_markers"):
         suffix = "" if patterns else " (no progress_patterns in config)"
         print(f"note: no progress markers found in the log{suffix} - using the directory check\n")
@@ -95,6 +99,13 @@ def _run_watch(args):
         print(f"State:         {squeue_info['state']}")
         print(f"Time used:     {squeue_info['time_used']} / {squeue_info['time_limit']}")
         print(f"Nodes/CPUs:    {squeue_info['nodes']} / {squeue_info['cpus']}")
+        if squeue_info["state"] == "PENDING":
+            try:
+                pos = compute_queue_position(run_squeue_pending_ids(args.jobid), args.jobid)
+            except SlurmCommandError:
+                pos = None
+            if pos:
+                print(f"Queue position: {pos}")
     else:
         print("State:         not found in queue (may have finished)")
 
@@ -122,6 +133,23 @@ def _run_diagnose(args):
     return diagnose_exit_code(sacct_info)
 
 
+def _run_ask(args):
+    try:
+        config = load_config(args.config)
+    except FileNotFoundError:
+        print(f"Error: could not find config file '{args.config}'")
+        sys.exit(2)
+    partition, modules, script = suggest_submission(
+        config, gpus=args.gpus, cpus=args.cpus, mem_gb=args.mem,
+        time_limit=args.time, app=args.app)
+    print("Suggested submission\n")
+    print(f"Partition: {partition or '(no partition fits your request)'}")
+    if modules:
+        print("Modules:   " + ", ".join(modules))
+    print("\n" + script)
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description="hpclint — a cluster-agnostic Slurm job assistant.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -144,6 +172,18 @@ def main():
     watch_parser.add_argument("--log", help="Path to the job's stdout/stderr log, to detect real progress (HPC-31)")
     watch_parser.add_argument("--config", default=os.environ.get("HPCLINT_DEFAULT_CONFIG"),
                               help="Cluster/app config providing progress_patterns/completion_markers (used with --log)")
+    watch_parser.add_argument("--sample-seconds", type=int, default=0,
+                              help="Re-sample the log N seconds later to compute progress rate + ETA (HPC-41)")
+
+    ask_parser = subparsers.add_parser("ask", help="Suggest partition, modules, and an sbatch skeleton from a short spec")
+    ask_parser.add_argument("--gpus", type=int, default=0)
+    ask_parser.add_argument("--cpus", type=int, default=1, help="cpus-per-task")
+    ask_parser.add_argument("--mem", type=int, default=None, help="Requested memory in GB")
+    ask_parser.add_argument("--time", dest="time", default=None, help="Walltime, e.g. 04:00:00")
+    ask_parser.add_argument("--app", default=None, help="Application name from config software_map")
+    ask_parser.add_argument("--config", default=os.environ.get("HPCLINT_DEFAULT_CONFIG"),
+                            required=os.environ.get("HPCLINT_DEFAULT_CONFIG") is None,
+                            help="Cluster YAML providing partitions + software_map")
 
     diagnose_parser = subparsers.add_parser("diagnose", help="Explain why a finished job failed (or didn't)")
     diagnose_parser.add_argument("jobid", help="Slurm job ID to diagnose")
@@ -152,6 +192,10 @@ def main():
 
     if args.command == "check":
         _run_check(args)
+        return
+
+    if args.command == "ask":
+        sys.exit(_run_ask(args))
         return
 
     try:

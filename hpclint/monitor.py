@@ -56,6 +56,32 @@ def run_sstat(jobid):
     return stripped.split("\n")[0] if stripped else None
 
 
+# --- Queue position (HPC-14) ------------------------------------------------
+
+def parse_pending_ids(text):
+    return [l.strip() for l in (text or "").splitlines() if l.strip()]
+
+
+def compute_queue_position(pending_ids, jobid):
+    """1-based position of jobid in an ordered pending list, or None. Matches an
+    exact id or the array parent (12345 matches array tasks 12345_0, ...)."""
+    want = str(jobid)
+    for i, j in enumerate(pending_ids):
+        if j == want or j.split("_")[0] == want:
+            return i + 1
+    return None
+
+
+def run_squeue_pending_ids(jobid):
+    """Return the ordered list of PENDING job ids in the same partition as the
+    given job (for queue-position). Needs a real cluster to exercise."""
+    partition = run_slurm(["squeue", "-h", "-P", "-j", str(jobid), "-o", "%P"]).strip()
+    if not partition:
+        return []
+    out = run_slurm(["squeue", "-h", "-P", "-t", "PENDING", "-p", partition.splitlines()[0].strip(), "-o", "%i"])
+    return parse_pending_ids(out)
+
+
 # --- Parsing (pure functions, testable with fixture text) -----------------
 
 def _to_int(value, default=0):
