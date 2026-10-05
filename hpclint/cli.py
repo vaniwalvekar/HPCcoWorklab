@@ -11,7 +11,7 @@ import sys
 import os
 import argparse
 
-from .checker import check_script, load_config
+from .checker import check_script, load_config, read_script
 from .monitor import (
     run_squeue,
     run_sstat,
@@ -27,6 +27,8 @@ from .monitor import (
 from .diagnose import run_sacct, parse_sacct_line, diagnose, diagnose_exit_code
 from .advisor import suggest_submission
 from .report import run_sacct_usage, parse_usage_line, summarize
+from .repro import loaded_modules, job_resources, build_snapshot
+from .ai import review_script, AiNotConfigured, AiError
 from .slurm import SlurmCommandError
 
 
@@ -53,14 +55,40 @@ def _run_check(args):
         print(f"  --{key} = {display_value}")
     print()
 
+    code = 1 if issues else 0
     if issues:
         print(f"Found {len(issues)} issue(s):\n")
         for i, issue in enumerate(issues, 1):
             print(f"{i}. {issue}")
-        sys.exit(1)
     else:
         print("No issues found.")
-        sys.exit(0)
+
+    if getattr(args, "ai", False):
+        _print_ai_notes(args.script, config)
+
+    sys.exit(code)
+
+
+def _print_ai_notes(script_path, config):
+    """Optional, advisory AI review. Never raises and never changes exit codes."""
+    try:
+        content = read_script(script_path)
+    except FileNotFoundError:
+        content = ""
+    try:
+        findings = review_script(content, config)
+    except AiNotConfigured as exc:
+        print(f"\nAI: skipped - {exc}")
+        return
+    except Exception as exc:  # fail-safe: AI must never break `check`
+        print(f"\nAI: skipped due to error: {exc}")
+        return
+    print("\nAI-assisted observations (advisory, not authoritative):")
+    if findings:
+        for f in findings:
+            print(f"  - {f}")
+    else:
+        print("  (none beyond what the deterministic checks found)")
 
 
 def _maybe_read_log(args):
@@ -179,6 +207,32 @@ def _run_report(args):
     return 0
 
 
+def _run_repro(args):
+    cluster = None
+    cfg_path = getattr(args, "config", None)
+    if cfg_path:
+        try:
+            cluster = (load_config(cfg_path) or {}).get("cluster_name")
+        except FileNotFoundError:
+            pass
+    resources = None
+    if args.jobid:
+        try:
+            resources = job_resources(args.jobid)
+        except SlurmCommandError as exc:
+            resources = f"(sacct unavailable: {exc})"
+    snap = build_snapshot(args.jobid, loaded_modules(), resources, cluster)
+    out_path = args.output or f"hpclint-repro-{args.jobid or 'env'}.txt"
+    print(snap)
+    try:
+        with open(out_path, "w") as f:
+            f.write(snap + "\n")
+        print(f"\nSaved -> {out_path}")
+    except OSError as exc:
+        print(f"\n(would save to {out_path}, but: {exc})")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description="hpclint — a cluster-agnostic Slurm job assistant.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -192,6 +246,8 @@ def main():
         help="Path to your cluster's YAML config file. Falls back to $HPCLINT_DEFAULT_CONFIG if set "
              "(e.g. via `module load hpclint`), so it's optional in that case.",
     )
+    check_parser.add_argument("--ai", action="store_true",
+                              help="Optional advisory LLM review (needs HPCLINT_AI_BASE_URL + HPCLINT_AI_API_KEY); never changes exit codes")
 
     watch_parser = subparsers.add_parser("watch", help="Check a running job's live status")
     watch_parser.add_argument("jobid", help="Slurm job ID to check")
@@ -218,6 +274,12 @@ def main():
     report_parser.add_argument("--user", default=os.environ.get("USER"), help="Account to report on (default: $USER)")
     report_parser.add_argument("--since", default="7 days", help="Time window for sacct (default: '7 days')")
 
+    repro_parser = subparsers.add_parser("repro", help="Write a reproducibility snapshot (modules + resources) (HPC-25)")
+    repro_parser.add_argument("jobid", nargs="?", help="Optional job id to include its sacct resources")
+    repro_parser.add_argument("--config", default=os.environ.get("HPCLINT_DEFAULT_CONFIG"),
+                              help="Cluster YAML for the cluster_name field (optional)")
+    repro_parser.add_argument("--output", default=None, help="Path to write the snapshot file")
+
     diagnose_parser = subparsers.add_parser("diagnose", help="Explain why a finished job failed (or didn't)")
     diagnose_parser.add_argument("jobid", help="Slurm job ID to diagnose")
 
@@ -233,6 +295,10 @@ def main():
 
     if args.command == "report":
         sys.exit(_run_report(args))
+        return
+
+    if args.command == "repro":
+        sys.exit(_run_repro(args))
         return
 
     try:

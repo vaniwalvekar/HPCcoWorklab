@@ -15,7 +15,7 @@ from hpclint import check_script, parse_mem_to_gb, load_config
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-LIBRA_CONFIG = os.path.join(REPO_ROOT, "configs", "libra.yaml")
+LIBRA_CONFIG = os.path.join(REPO_ROOT, "hpclint", "configs", "libra.yaml")
 
 
 def fixture_path(name):
@@ -253,6 +253,14 @@ def test_miniconda_under_home_warned(tmp_path):
     s = _env_job(tmp_path, "#!/bin/bash\n#SBATCH --partition compute\nconda activate $HOME/miniconda3/envs/ml\n")
     _, issues = check_script(s, _env_cfg())
     assert _env_warnings(issues)
+
+
+# --- HPC-51: bundled config resolution -------------------------------------
+
+def test_load_config_bundled_by_name():
+    from hpclint.checker import load_config
+    cfg = load_config("libra")          # no path -> resolves to packaged hpclint/configs/libra.yaml
+    assert cfg.get("cluster_name") == "SLU Libra"
 
 
 # --- Batch 1 (HPC-22/23/27/28) ---------------------------------------------

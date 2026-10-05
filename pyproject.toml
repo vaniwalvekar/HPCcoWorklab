@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hpclint"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A cluster-agnostic linter for Slurm job scripts — catches bad resource requests, missing fields, and misconfigurations before you submit, not after they fail."
 readme = "README.md"
 license = {text = "MIT"}
@@ -38,3 +38,9 @@ dev = ["pytest"]
 
 [tool.setuptools.packages.find]
 include = ["hpclint*"]
+
+[tool.setuptools.package-data]
+"hpclint.configs" = ["*.yaml"]
+
+[tool.setuptools.dynamic]
+version = {attr = "hpclint.__version__"}

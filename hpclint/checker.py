@@ -47,6 +47,28 @@ def read_script(path):
 
 
 def load_config(path):
+    """Load a cluster YAML. Accepts a filesystem path, or a bundled config name
+    (e.g. 'libra', 'libra.yaml', 'configs/libra.yaml') resolved from the
+    installed package, so `pip install hpclint` works without the repo."""
+    if path and os.path.isfile(path):
+        with open(path, "r") as f:
+            return yaml.safe_load(f)
+    name = os.path.basename(path) if path else ""
+    if name and not name.endswith((".yaml", ".yml")):
+        name += ".yaml"
+    if name:
+        try:
+            from importlib import resources
+            try:
+                ref = resources.files("hpclint.configs").joinpath(name)   # 3.9+
+                if ref.is_file():
+                    return yaml.safe_load(ref.read_text())
+            except AttributeError:
+                text = resources.read_text("hpclint.configs", name)        # 3.8
+                return yaml.safe_load(text)
+        except Exception:
+            pass
+    # Let open() raise FileNotFoundError (CLI renders a clear message).
     with open(path, "r") as f:
         return yaml.safe_load(f)
 

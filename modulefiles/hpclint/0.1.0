@@ -13,4 +13,6 @@ set HPCLINT_HOME "$::env(HOME)/.local/hpclint-venv"
 
 prepend-path PATH "$HPCLINT_HOME/bin"
 
-setenv HPCLINT_DEFAULT_CONFIG "$HPCLINT_HOME/configs/libra.yaml"
+# Bundled config name; hpclint resolves it from the installed package, so no
+# --config is needed. (See `hpclint/configs/`.)
+setenv HPCLINT_DEFAULT_CONFIG "libra"
