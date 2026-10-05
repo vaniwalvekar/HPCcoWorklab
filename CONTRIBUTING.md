@@ -6,7 +6,7 @@ are exactly what make it better.
 
 ## Ways to contribute
 
-- **A config file for your own cluster** — see [`configs/libra.yaml`](configs/libra.yaml)
+- **A config file for your own cluster** — see [`hpclint/configs/libra.yaml`](hpclint/configs/libra.yaml)
   for the full shape. If your cluster has partitions, limits, or rules
   hpclint doesn't yet model well, that's useful signal even without a
   code change.

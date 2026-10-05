@@ -84,3 +84,12 @@ completion_markers:
 # conflicting_modules:
 #   - ['cuda/11', 'cuda/12']
 #   - ['gcc/9', 'gcc/11', 'gcc/12']
+
+# Optional (HPC-40, `check --ai`): an OpenAI-compatible endpoint for the
+# ADVISORY, off-by-default AI review. Prefer env vars for the secret:
+#   HPCLINT_AI_BASE_URL, HPCLINT_AI_API_KEY, HPCLINT_AI_MODEL
+# Never required; the deterministic checks are always the source of truth.
+# ai:
+#   base_url: 'https://<your-provider>/v1'
+#   model: 'gpt-4o-mini'
+#   api_key: '<optional; prefer the env var>'

@@ -63,14 +63,14 @@ All three job-lifecycle commands are functional:
   CPU-bound-but-silent one.
 - `hpclint diagnose` — turns a finished job's `sacct` state + exit code into a
   plain-language cause and fix (OOM, timeout, segfault, cancel, node failure).
-- CI runs a **75+ test** suite (pure-logic plus realistic Slurm fixture text)
+- CI runs a **160+ test** suite (pure-logic plus realistic Slurm fixture text)
   across Python 3.8–3.12 on every push; end-to-end verification against live
   Slurm on Libra is the current milestone.
 - `check`, `watch`, and `diagnose` each return meaningful exit codes
   (`0` ok · `1` problem · `2` couldn't determine), so they're scriptable.
 
 ```
-$ hpclint check scripts/train.sh --config configs/libra.yaml
+$ hpclint check scripts/train.sh --config libra
 
 Checks completed. Here's the result:
 
@@ -153,6 +153,35 @@ Reads the job's `sacct` state and exit code and explains it in plain language �
 OOM, timeout, segfault, cancellation, node failure, or a normal finish — with a
 likely next step.
 
+**Get a submission skeleton (no Slurm needed):**
+```bash
+hpclint ask --gpus 1 --cpus 8 --mem 32 --app gromacs --config libra
+```
+Suggests a fitting partition + `module load`s (from the config `software_map`)
+and prints a ready-to-edit sbatch skeleton.
+
+**Audit CPU over-requesting:**
+```bash
+hpclint report [--user NAME] [--since "7 days"]
+```
+Compares core-hours *requested* vs *used* (from `sacct`) and lists the most
+wasteful recent jobs.
+
+**Reproducibility snapshot:**
+```bash
+hpclint repro [jobid] [--config libra] [--output file.txt]
+```
+Writes loaded modules (`$LOADEDMODULES`), the job's `sacct` resources, and
+cluster/python/host — something to attach to a paper.
+
+**Optional AI review (advisory, off by default):**
+```bash
+hpclint check script.sh --config libra --ai
+```
+With `HPCLINT_AI_BASE_URL`/`HPCLINT_AI_API_KEY` set (a non-NRP, OpenAI-compatible
+endpoint), adds non-authoritative observations. The deterministic checks and exit
+codes stay the source of truth; AI failures degrade to a note.
+
 ### Exit codes
 
 | Code | `check` | `watch` | `diagnose` |
@@ -163,7 +192,7 @@ likely next step.
 
 ## Writing a config for your cluster
 
-See [`configs/libra.yaml`](configs/libra.yaml) for a full real-world
+See [`hpclint/configs/libra.yaml`](hpclint/configs/libra.yaml) for a full real-world
 example. The shape is:
 
 ```yaml
