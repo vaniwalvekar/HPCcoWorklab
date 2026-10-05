@@ -26,6 +26,7 @@ from .monitor import (
 )
 from .diagnose import run_sacct, parse_sacct_line, diagnose, diagnose_exit_code
 from .advisor import suggest_submission
+from .report import run_sacct_usage, parse_usage_line, summarize
 from .slurm import SlurmCommandError
 
 
@@ -150,6 +151,34 @@ def _run_ask(args):
     return 0
 
 
+def _run_report(args):
+    try:
+        raw = run_sacct_usage(user=args.user, since=args.since)
+    except SlurmCommandError as exc:
+        print(f"Error: could not read accounting data - {exc}")
+        return 2
+    records = []
+    for line in raw.splitlines():
+        rec = parse_usage_line(line)
+        if rec:
+            records.append(rec)
+    if not records:
+        print(f"No jobs found in accounting for the last {args.since}.")
+        return 0
+    s = summarize(records)
+    print("Job utilization report\n")
+    print(f"Jobs analyzed:   {s['jobs']}")
+    print(f"Requested:       {s['cpu_alloc_core_hours']:.1f} core-hours")
+    print(f"Actually used:   {s['cpu_used_core_hours']:.1f} core-hours")
+    if s["cpu_utilization"] is not None:
+        print(f"CPU utilization: {s['cpu_utilization'] * 100:.0f}%")
+    if s["worst"]:
+        print("\nLowest-utilization jobs (asked vs used core-hours):")
+        for util, jid, name, alloc, ah, uh in s["worst"]:
+            print(f"  {jid:>10} {name[:22]:22} {util * 100:3.0f}%  ({uh:.1f} used / {ah:.1f} asked)")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description="hpclint — a cluster-agnostic Slurm job assistant.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -185,6 +214,10 @@ def main():
                             required=os.environ.get("HPCLINT_DEFAULT_CONFIG") is None,
                             help="Cluster YAML providing partitions + software_map")
 
+    report_parser = subparsers.add_parser("report", help="Summarize CPU over-requesting across your recent jobs (HPC-21)")
+    report_parser.add_argument("--user", default=os.environ.get("USER"), help="Account to report on (default: $USER)")
+    report_parser.add_argument("--since", default="7 days", help="Time window for sacct (default: '7 days')")
+
     diagnose_parser = subparsers.add_parser("diagnose", help="Explain why a finished job failed (or didn't)")
     diagnose_parser.add_argument("jobid", help="Slurm job ID to diagnose")
 
@@ -196,6 +229,10 @@ def main():
 
     if args.command == "ask":
         sys.exit(_run_ask(args))
+        return
+
+    if args.command == "report":
+        sys.exit(_run_report(args))
         return
 
     try:
