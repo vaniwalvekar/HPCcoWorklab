@@ -292,6 +292,54 @@ def recommend_modules(content, software_map):
     return recs
 
 
+def get_gpu_request(content):
+    """HPC-35: aggregate a job's GPU request across --gpus, --gpus-per-node,
+    --gpus-per-task and --gres=gpu[...] so a valid `--gres=gpu:1` job is not
+    treated as requesting zero GPUs. Returns {'total','per_node','present'}."""
+    present = False
+    total = 0
+    per_node = 0
+
+    nodes = find_sbatch_value(content, "nodes")
+    try:
+        nodes_i = int(nodes) if nodes else 1
+    except ValueError:
+        nodes_i = 1
+
+    g = find_sbatch_value(content, "gpus")
+    if g is not None:
+        present = True
+        c = parse_gpu_count(g)
+        if c:
+            total += c
+            per_node += c if nodes_i <= 1 else -(-c // nodes_i)
+
+    gpn = find_sbatch_value(content, "gpus-per-node")
+    if gpn is not None:
+        present = True
+        c = parse_gpu_count(gpn)
+        if c:
+            per_node = max(per_node, c)
+            total = max(total, c * nodes_i)
+
+    if find_sbatch_value(content, "gpus-per-task") is not None:
+        present = True
+
+    gres = find_sbatch_value(content, "gres")
+    if gres is not None:
+        for tok in str(gres).split(","):
+            tok = tok.strip().lower()
+            if not tok or not (tok.startswith("gpu") or ":gpu" in tok):
+                continue
+            present = True
+            segs = [s for s in tok.split(":") if s.isdigit()]
+            c = int(segs[-1]) if segs else 1
+            per_node += c
+            total += c
+
+    return {"total": total, "per_node": per_node, "present": present}
+
+
 def recommend_partitions(config, gpu_count, mem_gb):
     """HPC-23: partition names that can actually satisfy the request."""
     out = []
@@ -417,22 +465,29 @@ def check_script(script_path, config):
 
     has_gpu = partition_spec.get("has_gpu", False)
     gpu_max = partition_spec.get("gpu_max")
-    if "gpus" in required_fields and gpus is None:
-        note = f" (use --gpus=0 on '{effective_partition}', which has no GPUs)" if not has_gpu else ""
-        issues.append(f"No --gpus set. This cluster requires a GPU count on every job script{note}.")
-    elif gpus is not None:
-        gpu_count = parse_gpu_count(gpus)
-        if gpu_count is None:
+    gpu_req = get_gpu_request(content)
+
+    if gpus is not None and parse_gpu_count(gpus) is None:
+        issues.append(
+            f"--gpus='{gpus}' isn't in a form hpccoworklab can count; double-check the syntax."
+        )
+    if "gpus" in required_fields and not gpu_req["present"]:
+        note = f" (use --gpus=0, or omit --gres=gpu, on '{effective_partition}', which has no GPUs)" if not has_gpu else ""
+        issues.append(
+            "No GPU request found (use --gpus=N or --gres=gpu:N). This cluster requires a GPU "
+            f"count on every job script{note}."
+        )
+    elif gpu_req["present"]:
+        requested = gpu_req["per_node"] or gpu_req["total"]
+        if not has_gpu and requested:
             issues.append(
-                f"--gpus='{gpus}' isn't in a form hpccoworklab can count; double-check the syntax."
+                f"Requested {requested} GPU(s), but '{effective_partition}' has no GPUs. Use a "
+                f"GPU partition, or set --gpus=0 / remove --gres=gpu."
             )
-        elif not has_gpu and gpu_count != 0:
+        elif has_gpu and gpu_max is not None and gpu_req["per_node"] > gpu_max:
             issues.append(
-                f"Requested --gpus={gpus}, but '{effective_partition}' has no GPUs. Set --gpus=0 or use a GPU partition."
-            )
-        elif has_gpu and gpu_max is not None and gpu_count > gpu_max:
-            issues.append(
-                f"Requested --gpus={gpus}, but '{effective_partition}' nodes only have {gpu_max} GPUs. Lower --gpus."
+                f"Requested {gpu_req['per_node']} GPU(s)/node, but '{effective_partition}' nodes only "
+                f"have {gpu_max}. Lower the GPU request."
             )
 
     for field in recommended_fields:
@@ -542,7 +597,7 @@ def check_script(script_path, config):
     # --- Partition recommendation when none/invalid given (HPC-23) ---
     if partition is None or partition not in valid_partitions:
         _cands = recommend_partitions(
-            config, parse_gpu_count(gpus), parse_mem_to_gb(mem) if mem else None)
+            config, gpu_req["per_node"] or gpu_req["total"], parse_mem_to_gb(mem) if mem else None)
         if _cands:
             issues.append(
                 "No usable --partition set; based on your resource request, suitable "
