@@ -3,25 +3,38 @@ cluster_name: "SLU Libra"
 # Every partition your cluster has. Any partition not listed here is treated
 # as invalid (a likely typo) by the checker.
 partitions:
+  # Nodes: comp[01-03],compcasanova (4). Measured via sinfo/scontrol (HPC-10).
+  # Note MaxMemPerNode is UNLIMITED (no scheduler cap); mem_gb_max here is just
+  # the "bigger than any single node" sanity ceiling for `check`.
   compute:
     is_default: true
     has_gpu: false
-    cpus_per_task_max: 64      # 2x Xeon Gold 6526Y, 32C/64T, SMT enabled
-    mem_gb_max: 1024           # 1 TB per node
+    cpus_per_task_max: 64      # 64 logical CPUs/node
+    mem_gb_max: 1007           # ~1031520 MB/node
+    default_time: 7-00:00:00   # scheduler default if --time omitted
+    max_time: 7-00:00:00
 
+  # Nodes: gpu[01-03],gpuhuang (4), each 2x NVIDIA L40S (nvidia_l40s).
   gpu:
     is_default: false
     has_gpu: true
-    gpu_max: 2                 # 2x NVIDIA L40S 48GB
+    gpu_max: 2                 # 2x NVIDIA L40S per node
     cpus_per_task_max: 64
-    mem_gb_max: 512
+    mem_gb_max: 503            # ~515479 MB/node
+    default_time: 1-00:00:00
+    max_time: 7-00:00:00
 
+  # HETEROGENEOUS: ml[01-02] have 4x H100; mlfrey,mlgong have 2x H100
+  # (nvidia_h100_nvl). gpu_max=4 matches the large nodes; a 3-4 GPU job may not
+  # fit on mlfrey/mlgong.
   machinelearning:
     is_default: false
     has_gpu: true
-    gpu_max: 4                 # 4x NVIDIA H100 80GB
+    gpu_max: 4                 # 4x H100 on ml01-02; only 2 on mlfrey/mlgong
     cpus_per_task_max: 64
-    mem_gb_max: 1024
+    mem_gb_max: 1007           # ~1031574 MB/node
+    default_time: 1-00:00:00
+    max_time: 7-00:00:00
 
 # #SBATCH fields that must be present on every job script.
 required_fields: ["nodes", "gpus"]
