@@ -1,5 +1,5 @@
 """
-Tests for hpclint.monitor — parsing and health-assessment logic only.
+Tests for hpccoworklab.monitor — parsing and health-assessment logic only.
 
 These test the pure functions against realistic fixture text, not the
 actual subprocess calls (run_squeue/run_sstat), since that needs a real
@@ -11,7 +11,7 @@ at that point rather than piecemeal.
 import os
 import time
 
-from hpclint.monitor import (
+from hpccoworklab.monitor import (
     parse_squeue_line,
     parse_sstat_line,
     check_output_activity,
@@ -312,21 +312,21 @@ def test_exit_code_matches_verdict_for_busy_but_silent():
 # --- HPC-14: queue position -------------------------------------------------
 
 def test_parse_pending_ids():
-    from hpclint.monitor import parse_pending_ids
+    from hpccoworklab.monitor import parse_pending_ids
     assert parse_pending_ids("10\n11\n\n12\n") == ["10", "11", "12"]
     assert parse_pending_ids("") == []
 
 
 def test_compute_queue_position_exact():
-    from hpclint.monitor import compute_queue_position
+    from hpccoworklab.monitor import compute_queue_position
     assert compute_queue_position(["10", "11", "12"], "11") == 2
 
 
 def test_compute_queue_position_array_parent():
-    from hpclint.monitor import compute_queue_position
+    from hpccoworklab.monitor import compute_queue_position
     assert compute_queue_position(["5_0", "5_1", "9"], "5") == 1
 
 
 def test_compute_queue_position_missing():
-    from hpclint.monitor import compute_queue_position
+    from hpccoworklab.monitor import compute_queue_position
     assert compute_queue_position(["1", "2"], "99") is None

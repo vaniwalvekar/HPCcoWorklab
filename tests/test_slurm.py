@@ -1,5 +1,5 @@
 """
-Tests for hpclint.slurm and the Slurm-command wrappers' error handling (HPC-5).
+Tests for hpccoworklab.slurm and the Slurm-command wrappers' error handling (HPC-5).
 
 These exercise the failure paths we cannot hit without a real cluster by
 patching subprocess.run: missing binary, timeout, and non-zero exit must all
@@ -11,8 +11,8 @@ import subprocess
 
 import pytest
 
-import hpclint.slurm as slurm
-from hpclint.slurm import run_slurm, SlurmCommandError
+import hpccoworklab.slurm as slurm
+from hpccoworklab.slurm import run_slurm, SlurmCommandError
 
 
 class _FakeResult:
@@ -60,7 +60,7 @@ def test_run_slurm_timeout_raises(monkeypatch):
 
 
 def test_run_squeue_propagates_command_error(monkeypatch):
-    import hpclint.monitor as monitor
+    import hpccoworklab.monitor as monitor
     monkeypatch.setattr(slurm.subprocess, "run",
                         lambda *a, **k: _FakeResult(2, "", "controller down"))
     with pytest.raises(SlurmCommandError):
@@ -68,6 +68,6 @@ def test_run_squeue_propagates_command_error(monkeypatch):
 
 
 def test_run_squeue_not_found_returns_none(monkeypatch):
-    import hpclint.monitor as monitor
+    import hpccoworklab.monitor as monitor
     monkeypatch.setattr(slurm.subprocess, "run", lambda *a, **k: _FakeResult(0, ""))
     assert monitor.run_squeue(999999) is None

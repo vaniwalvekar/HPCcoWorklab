@@ -1,5 +1,5 @@
 """
-hpclint.repro - reproducibility snapshot (HPC-25).
+hpccoworklab.repro - reproducibility snapshot (HPC-25).
 
 Capture the environment a job ran (or will run) in: loaded modules, the job's
 requested resources from `sacct`, Python/cluster/host, so you can attach an
@@ -43,7 +43,7 @@ def build_snapshot(jobid=None, modules=None, resources=None, cluster=None,
     """Assemble a plain-text reproducibility manifest from already-gathered facts
     (pure + testable)."""
     modules = modules or []
-    lines = ["# hpclint reproducibility snapshot"]
+    lines = ["# hpccoworklab reproducibility snapshot"]
     lines.append(f"job: {jobid or '(current session)'}")
     lines.append(f"cluster: {cluster or 'unknown'}")
     lines.append(f"host: {host or socket.gethostname()}")

@@ -1,5 +1,5 @@
 """
-Regression suite for hpclint.
+Regression suite for hpccoworklab.
 
 Each test here corresponds to something we found and fixed by hand during
 development (the MPI false positive, the memory-unit bug, the overflow
@@ -11,11 +11,11 @@ import os
 
 import pytest
 
-from hpclint import check_script, parse_mem_to_gb, load_config
+from hpccoworklab import check_script, parse_mem_to_gb, load_config
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-LIBRA_CONFIG = os.path.join(REPO_ROOT, "hpclint", "configs", "libra.yaml")
+LIBRA_CONFIG = os.path.join(REPO_ROOT, "hpccoworklab", "configs", "libra.yaml")
 
 
 def fixture_path(name):
@@ -56,7 +56,7 @@ def test_mem_no_unit_is_mb():
 
 # --- HPC-34: directive + GPU-spec parsing robustness ----------------------
 
-from hpclint.checker import (
+from hpccoworklab.checker import (
     find_sbatch_value, parse_gpu_count,
     recommend_checkpointing, recommend_modules, recommend_partitions,
     check_containers, _time_str_to_seconds,
@@ -258,8 +258,8 @@ def test_miniconda_under_home_warned(tmp_path):
 # --- HPC-51: bundled config resolution -------------------------------------
 
 def test_load_config_bundled_by_name():
-    from hpclint.checker import load_config
-    cfg = load_config("libra")          # no path -> resolves to packaged hpclint/configs/libra.yaml
+    from hpccoworklab.checker import load_config
+    cfg = load_config("libra")          # no path -> resolves to packaged hpccoworklab/configs/libra.yaml
     assert cfg.get("cluster_name") == "SLU Libra"
 
 

@@ -1,10 +1,10 @@
 """
-hpclint.cli — command-line entry point for hpclint.
+hpccoworklab.cli — command-line entry point for hpccoworklab.
 
 Subcommands:
-    hpclint check <script> --config <config.yaml>   Pre-submission script check
-    hpclint watch <jobid> [--output-dir DIR]         Live job health check
-    hpclint diagnose <jobid>                         Post-run failure explanation
+    hpccoworklab check <script> --config <config.yaml>   Pre-submission script check
+    hpccoworklab watch <jobid> [--output-dir DIR]         Live job health check
+    hpccoworklab diagnose <jobid>                         Post-run failure explanation
 """
 
 import sys
@@ -222,7 +222,7 @@ def _run_repro(args):
         except SlurmCommandError as exc:
             resources = f"(sacct unavailable: {exc})"
     snap = build_snapshot(args.jobid, loaded_modules(), resources, cluster)
-    out_path = args.output or f"hpclint-repro-{args.jobid or 'env'}.txt"
+    out_path = args.output or f"hpccoworklab-repro-{args.jobid or 'env'}.txt"
     print(snap)
     try:
         with open(out_path, "w") as f:
@@ -234,20 +234,20 @@ def _run_repro(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="hpclint — a cluster-agnostic Slurm job assistant.")
+    parser = argparse.ArgumentParser(description="hpccoworklab — a cluster-agnostic Slurm job assistant.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     check_parser = subparsers.add_parser("check", help="Check a job script before submission")
     check_parser.add_argument("script", help="Path to the Slurm job script (.sh/.slurm) to check")
     check_parser.add_argument(
         "--config",
-        default=os.environ.get("HPCLINT_DEFAULT_CONFIG"),
-        required=os.environ.get("HPCLINT_DEFAULT_CONFIG") is None,
-        help="Path to your cluster's YAML config file. Falls back to $HPCLINT_DEFAULT_CONFIG if set "
-             "(e.g. via `module load hpclint`), so it's optional in that case.",
+        default=os.environ.get("HPCCOWORKLAB_DEFAULT_CONFIG"),
+        required=os.environ.get("HPCCOWORKLAB_DEFAULT_CONFIG") is None,
+        help="Path to your cluster's YAML config file. Falls back to $HPCCOWORKLAB_DEFAULT_CONFIG if set "
+             "(e.g. via `module load hpccoworklab`), so it's optional in that case.",
     )
     check_parser.add_argument("--ai", action="store_true",
-                              help="Optional advisory LLM review (needs HPCLINT_AI_BASE_URL + HPCLINT_AI_API_KEY); never changes exit codes")
+                              help="Optional advisory LLM review (needs HPCCOWORKLAB_AI_BASE_URL + HPCCOWORKLAB_AI_API_KEY); never changes exit codes")
 
     watch_parser = subparsers.add_parser("watch", help="Check a running job's live status")
     watch_parser.add_argument("jobid", help="Slurm job ID to check")
@@ -255,7 +255,7 @@ def main():
     watch_parser.add_argument("--stale-minutes", type=int, default=30,
                                help="Minutes of no file activity before flagging as stale (default: 30)")
     watch_parser.add_argument("--log", help="Path to the job's stdout/stderr log, to detect real progress (HPC-31)")
-    watch_parser.add_argument("--config", default=os.environ.get("HPCLINT_DEFAULT_CONFIG"),
+    watch_parser.add_argument("--config", default=os.environ.get("HPCCOWORKLAB_DEFAULT_CONFIG"),
                               help="Cluster/app config providing progress_patterns/completion_markers (used with --log)")
     watch_parser.add_argument("--sample-seconds", type=int, default=0,
                               help="Re-sample the log N seconds later to compute progress rate + ETA (HPC-41)")
@@ -266,8 +266,8 @@ def main():
     ask_parser.add_argument("--mem", type=int, default=None, help="Requested memory in GB")
     ask_parser.add_argument("--time", dest="time", default=None, help="Walltime, e.g. 04:00:00")
     ask_parser.add_argument("--app", default=None, help="Application name from config software_map")
-    ask_parser.add_argument("--config", default=os.environ.get("HPCLINT_DEFAULT_CONFIG"),
-                            required=os.environ.get("HPCLINT_DEFAULT_CONFIG") is None,
+    ask_parser.add_argument("--config", default=os.environ.get("HPCCOWORKLAB_DEFAULT_CONFIG"),
+                            required=os.environ.get("HPCCOWORKLAB_DEFAULT_CONFIG") is None,
                             help="Cluster YAML providing partitions + software_map")
 
     report_parser = subparsers.add_parser("report", help="Summarize CPU over-requesting across your recent jobs (HPC-21)")
@@ -276,7 +276,7 @@ def main():
 
     repro_parser = subparsers.add_parser("repro", help="Write a reproducibility snapshot (modules + resources) (HPC-25)")
     repro_parser.add_argument("jobid", nargs="?", help="Optional job id to include its sacct resources")
-    repro_parser.add_argument("--config", default=os.environ.get("HPCLINT_DEFAULT_CONFIG"),
+    repro_parser.add_argument("--config", default=os.environ.get("HPCCOWORKLAB_DEFAULT_CONFIG"),
                               help="Cluster YAML for the cluster_name field (optional)")
     repro_parser.add_argument("--output", default=None, help="Path to write the snapshot file")
 

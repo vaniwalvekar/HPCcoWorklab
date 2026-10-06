@@ -1,4 +1,4 @@
-# hpclint
+# HPCcoWorklab
 
 **The missing pre-flight check for HPC jobs — and the first piece of a
 complete Slurm job assistant.**
@@ -9,13 +9,13 @@ asked for more memory than any node has. Or worse — it runs for six hours,
 using 100% CPU the whole time, and produces nothing, because it was quietly
 stuck the entire way through.
 
-hpclint exists so that stops happening.
+HPCcoWorklab exists so that stops happening.
 
 ## The idea
 
 A Slurm job goes through a lifecycle — written, submitted, queued, run,
 finished (or not) — and at almost every stage, something can quietly go
-wrong that nobody notices until it's too late. hpclint is being built to
+wrong that nobody notices until it's too late. HPCcoWorklab is being built to
 watch the whole lifecycle, not just one moment of it.
 
 ### 🧭 Before you submit
@@ -37,7 +37,7 @@ watch the whole lifecycle, not just one moment of it.
 
 ### 🔍 After it finishes
 *Turn "it failed" into "here's why, and here's the fix."*
-- `hpclint diagnose` translates cryptic exit codes, OOM kills, timeouts,
+- `hpccoworklab diagnose` translates cryptic exit codes, OOM kills, timeouts,
   segfaults, cancellations, and node failures into plain language with a
   likely cause and a next step
 - (planned) Track your own jobs over time and spot recurring over-request patterns
@@ -53,15 +53,15 @@ watch the whole lifecycle, not just one moment of it.
 
 All three job-lifecycle commands are functional:
 
-- `hpclint check` — validates `#SBATCH` directives against a cluster's real
+- `hpccoworklab check` — validates `#SBATCH` directives against a cluster's real
   hardware and rules (YAML-configured, works on any Slurm cluster):
   MPI-vs-threaded aware, core-overflow math, missing referenced files,
   slow-storage warnings, unit-safe memory parsing.
-- `hpclint watch` — combines live `squeue`/`sstat` status with output-directory
+- `hpccoworklab watch` — combines live `squeue`/`sstat` status with output-directory
   activity, and decides "busy vs stuck" from real **CPU time (`AveCPU`)**, not
   wall-clock — so a deadlocked low-CPU job reads as *blocked*, distinct from a
   CPU-bound-but-silent one.
-- `hpclint diagnose` — turns a finished job's `sacct` state + exit code into a
+- `hpccoworklab diagnose` — turns a finished job's `sacct` state + exit code into a
   plain-language cause and fix (OOM, timeout, segfault, cancel, node failure).
 - CI runs a **160+ test** suite (pure-logic plus realistic Slurm fixture text)
   across Python 3.8–3.12 on every push; end-to-end verification against live
@@ -70,7 +70,7 @@ All three job-lifecycle commands are functional:
   (`0` ok · `1` problem · `2` couldn't determine), so they're scriptable.
 
 ```
-$ hpclint check scripts/train.sh --config libra
+$ hpccoworklab check scripts/train.sh --config libra
 
 Checks completed. Here's the result:
 
@@ -110,21 +110,21 @@ Plenty of great tools cover pieces of this — `jobstats`, `seff`, and
 `reportseff` are all excellent at telling you how a *completed* job
 performed. Nothing widely adopted watches the whole journey: before,
 during, and after, tuned to your specific cluster's rules. That's the gap
-hpclint is aiming to fill.
+hpccoworklab is aiming to fill.
 
 ## Installation
 
 **From TestPyPI** (current release, while the project is still early):
 
 ```bash
-pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ hpclint
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ hpccoworklab
 ```
 
 **From source** (for development, or to get the latest unreleased changes):
 
 ```bash
-git clone https://github.com/vaniwalvekar/hpclint.git
-cd hpclint
+git clone https://github.com/vaniwalvekar/hpccoworklab.git
+cd hpccoworklab
 pip install -e .
 ```
 
@@ -132,12 +132,12 @@ pip install -e .
 
 **Check a script before submitting:**
 ```bash
-hpclint check <path_to_script> --config <path_to_cluster_config.yaml>
+hpccoworklab check <path_to_script> --config <path_to_cluster_config.yaml>
 ```
 
 **Watch a running job's live status:**
 ```bash
-hpclint watch <jobid> --output-dir <path_the_job_writes_to> [--stale-minutes 30]
+hpccoworklab watch <jobid> --output-dir <path_the_job_writes_to> [--stale-minutes 30]
 ```
 Combines `squeue` + `sstat` with output-directory activity. It decides whether a
 job is actually *working* from real CPU time (`AveCPU`), so it distinguishes the
@@ -147,7 +147,7 @@ or waiting on a resource). Both can silently burn an entire allocation.
 
 **Diagnose a finished job:**
 ```bash
-hpclint diagnose <jobid>
+hpccoworklab diagnose <jobid>
 ```
 Reads the job's `sacct` state and exit code and explains it in plain language —
 OOM, timeout, segfault, cancellation, node failure, or a normal finish — with a
@@ -155,30 +155,30 @@ likely next step.
 
 **Get a submission skeleton (no Slurm needed):**
 ```bash
-hpclint ask --gpus 1 --cpus 8 --mem 32 --app gromacs --config libra
+hpccoworklab ask --gpus 1 --cpus 8 --mem 32 --app gromacs --config libra
 ```
 Suggests a fitting partition + `module load`s (from the config `software_map`)
 and prints a ready-to-edit sbatch skeleton.
 
 **Audit CPU over-requesting:**
 ```bash
-hpclint report [--user NAME] [--since "7 days"]
+hpccoworklab report [--user NAME] [--since "7 days"]
 ```
 Compares core-hours *requested* vs *used* (from `sacct`) and lists the most
 wasteful recent jobs.
 
 **Reproducibility snapshot:**
 ```bash
-hpclint repro [jobid] [--config libra] [--output file.txt]
+hpccoworklab repro [jobid] [--config libra] [--output file.txt]
 ```
 Writes loaded modules (`$LOADEDMODULES`), the job's `sacct` resources, and
 cluster/python/host — something to attach to a paper.
 
 **Optional AI review (advisory, off by default):**
 ```bash
-hpclint check script.sh --config libra --ai
+hpccoworklab check script.sh --config libra --ai
 ```
-With `HPCLINT_AI_BASE_URL`/`HPCLINT_AI_API_KEY` set (a non-NRP, OpenAI-compatible
+With `HPCCOWORKLAB_AI_BASE_URL`/`HPCCOWORKLAB_AI_API_KEY` set (a non-NRP, OpenAI-compatible
 endpoint), adds non-authoritative observations. The deterministic checks and exit
 codes stay the source of truth; AI failures degrade to a note.
 
@@ -192,7 +192,7 @@ codes stay the source of truth; AI failures degrade to a note.
 
 ## Writing a config for your cluster
 
-See [`hpclint/configs/libra.yaml`](hpclint/configs/libra.yaml) for a full real-world
+See [`hpccoworklab/configs/libra.yaml`](hpccoworklab/configs/libra.yaml) for a full real-world
 example. The shape is:
 
 ```yaml

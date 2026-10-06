@@ -1,5 +1,5 @@
 """
-hpclint.monitor — live monitoring for a running Slurm job: unified
+hpccoworklab.monitor — live monitoring for a running Slurm job: unified
 squeue/sstat status, plus detection of jobs that are running but not
 actually making progress (busy-but-silent / stuck).
 
@@ -324,7 +324,7 @@ def _log_based_verdict(squeue_info, log_info, has_accrued_cpu_time, cpu_known):
     if log_info.get("finished"):
         return (
             "Job's log shows its completion marker - it appears to have finished. "
-            "Confirm the final state with `hpclint diagnose`."
+            "Confirm the final state with `hpccoworklab diagnose`."
         )
     mins = log_info.get("minutes_since_write")
     mins_str = f"{mins:.0f}" if mins is not None else "an unknown number of"

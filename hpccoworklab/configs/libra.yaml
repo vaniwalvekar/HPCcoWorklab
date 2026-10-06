@@ -38,7 +38,7 @@ slow_io_paths:
   - path_markers: ["/home/", "$HOME"]
     recommend: "$SCRATCH"
 
-# Used by `hpclint watch --log <file>` (HPC-31) to detect real progress from
+# Used by `hpccoworklab watch --log <file>` (HPC-31) to detect real progress from
 # the job's log instead of relying only on file timestamps. Each pattern must
 # capture a monotonically-increasing counter in group 1. Optional total_regex
 # gives the denominator for a percentage / ETA. Omit to skip log detection.
@@ -55,15 +55,15 @@ completion_markers:
   - '\b(done|finished|completed)\b'
   - 'exit code[: ]+0'
 
-# Optional (HPC-13, interactive-vs-batch detection in `hpclint check`).
+# Optional (HPC-13, interactive-vs-batch detection in `hpccoworklab check`).
 # interactive_markers overrides built-ins (jupyter/ipython/code-server/x11/--pty).
 # interactive_partitions lists the queue(s) suited to interactive work; while
-# empty, hpclint still flags interactive jobs but can't name the right queue.
+# empty, hpccoworklab still flags interactive jobs but can't name the right queue.
 # Fill in once confirmed via `sinfo` (HPC-10), e.g. interactive_partitions: [login]
 # interactive_markers: ['\bjupyter\b']
 # interactive_partitions: []
 
-# Optional (HPC-12, `hpclint check`): override the patterns used to spot a
+# Optional (HPC-12, `hpccoworklab check`): override the patterns used to spot a
 # Python environment path (defaults cover .venv/venv, .conda/envs, miniconda3,
 # anaconda3, bin/activate). An env path that also sits under a slow_io_paths
 # marker is flagged. Only explicit paths match, so `conda activate name` is safe.
@@ -73,7 +73,7 @@ completion_markers:
 # checkpoint_time_threshold_hours: 24
 
 # Optional (HPC-22, `check`): map software seen in a script to suggested
-# `module load` names. Fully cluster-owned so hpclint hardcodes nothing. e.g.:
+# `module load` names. Fully cluster-owned so hpccoworklab hardcodes nothing. e.g.:
 # software_map:
 #   gromacs: {match: ['gmx(_mpi)?\b', 'gromacs'], modules: ['GROMACS']}
 #   pytorch: {match: ['\btorch\b', 'import torch'], modules: ['pytorch-cuda']}
@@ -87,7 +87,7 @@ completion_markers:
 
 # Optional (HPC-40, `check --ai`): an OpenAI-compatible endpoint for the
 # ADVISORY, off-by-default AI review. Prefer env vars for the secret:
-#   HPCLINT_AI_BASE_URL, HPCLINT_AI_API_KEY, HPCLINT_AI_MODEL
+#   HPCCOWORKLAB_AI_BASE_URL, HPCCOWORKLAB_AI_API_KEY, HPCCOWORKLAB_AI_MODEL
 # Never required; the deterministic checks are always the source of truth.
 # ai:
 #   base_url: 'https://<your-provider>/v1'

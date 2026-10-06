@@ -1,5 +1,5 @@
 """
-hpclint.ai - OPTIONAL, advisory LLM code review (HPC-40).
+hpccoworklab.ai - OPTIONAL, advisory LLM code review (HPC-40).
 
 Strictly additive and fail-safe:
   * Off unless the user passes `--ai` AND configures an endpoint/key.
@@ -29,9 +29,9 @@ def ai_settings(config=None):
     """Resolve endpoint/key/model from env first, then the config `ai:` block."""
     config = config or {}
     ai = config.get("ai") or {}
-    base_url = os.environ.get("HPCLINT_AI_BASE_URL") or ai.get("base_url")
-    api_key = os.environ.get("HPCLINT_AI_API_KEY") or ai.get("api_key")
-    model = os.environ.get("HPCLINT_AI_MODEL") or ai.get("model") or "gpt-4o-mini"
+    base_url = os.environ.get("HPCCOWORKLAB_AI_BASE_URL") or ai.get("base_url")
+    api_key = os.environ.get("HPCCOWORKLAB_AI_API_KEY") or ai.get("api_key")
+    model = os.environ.get("HPCCOWORKLAB_AI_MODEL") or ai.get("model") or "gpt-4o-mini"
     return {"base_url": base_url, "api_key": api_key, "model": model,
             "enabled": bool(base_url and api_key)}
 
@@ -90,7 +90,7 @@ def review_script(script_content, config=None, timeout=30):
     s = ai_settings(config)
     if not s["enabled"]:
         raise AiNotConfigured(
-            "AI not configured (set HPCLINT_AI_BASE_URL and HPCLINT_AI_API_KEY, "
+            "AI not configured (set HPCCOWORKLAB_AI_BASE_URL and HPCCOWORKLAB_AI_API_KEY, "
             "or an `ai:` block in the config).")
     payload = {"model": s["model"], "messages": _build_messages(script_content, config),
                "temperature": 0}

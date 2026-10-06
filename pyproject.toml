@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hpclint"
+name = "hpccoworklab"
 dynamic = ["version"]
-description = "A cluster-agnostic linter for Slurm job scripts — catches bad resource requests, missing fields, and misconfigurations before you submit, not after they fail."
+description = "A copilot for Slurm HPC jobs: catches bad resource requests before you submit, watches running jobs to spot the ones that are stuck-but-silent, and explains why a finished job failed. Cluster-agnostic via YAML config."
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.8"
@@ -28,19 +28,19 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/vaniwalvekar/hpclint"
+Homepage = "https://github.com/vaniwalvekar/hpccoworklab"
 
 [project.scripts]
-hpclint = "hpclint.cli:main"
+hpccoworklab = "hpccoworklab.cli:main"
 
 [project.optional-dependencies]
 dev = ["pytest"]
 
 [tool.setuptools.packages.find]
-include = ["hpclint*"]
+include = ["hpccoworklab*"]
 
 [tool.setuptools.package-data]
-"hpclint.configs" = ["*.yaml"]
+"hpccoworklab.configs" = ["*.yaml"]
 
 [tool.setuptools.dynamic]
-version = {attr = "hpclint.__version__"}
+version = {attr = "hpccoworklab.__version__"}

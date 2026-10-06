@@ -1,5 +1,5 @@
 """
-hpclint.slurm — one safe way to run Slurm CLI commands (squeue/sstat/sacct).
+hpccoworklab.slurm — one safe way to run Slurm CLI commands (squeue/sstat/sacct).
 
 Centralises the things every wrapper must get right so a problem on a real
 cluster produces a clear message instead of a stack trace:
@@ -31,7 +31,7 @@ def run_slurm(args, timeout=DEFAULT_TIMEOUT_SECONDS):
         result = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
     except FileNotFoundError:
         raise SlurmCommandError(
-            f"Slurm command '{args[0]}' was not found. Run hpclint on a login/compute "
+            f"Slurm command '{args[0]}' was not found. Run hpccoworklab on a login/compute "
             f"node where Slurm is available (after any required 'module load')."
         )
     except subprocess.TimeoutExpired:

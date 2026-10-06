@@ -1,5 +1,5 @@
 """
-hpclint.diagnose — post-run analysis for a finished Slurm job.
+hpccoworklab.diagnose — post-run analysis for a finished Slurm job.
 
 Wraps `sacct` to pull a job's final state and exit code, and translates
 common failure patterns (OOM kill, timeout, segfault, node failure) into
@@ -100,7 +100,7 @@ def diagnose(sacct_info):
     elif state in _TRANSIENT_STATES:
         lines.append(
             f"State: {raw_state} — the job hasn't failed; it is still {state.lower()} in the "
-            f"accounting log. If `hpclint watch` cannot find this job in squeue, that is usually "
+            f"accounting log. If `hpccoworklab watch` cannot find this job in squeue, that is usually "
             f"a stale 'ghost' record - trust squeue for the live state."
         )
     else:

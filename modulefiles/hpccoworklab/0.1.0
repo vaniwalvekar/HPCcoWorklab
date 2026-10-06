@@ -1,0 +1,18 @@
+#%Module1.0
+
+proc ModulesHelp { } {
+    puts stderr "hpccoworklab - a cluster-agnostic linter for Slurm job scripts."
+    puts stderr "Usage: hpccoworklab check <script> --config <config.yaml>"
+    puts stderr "       hpccoworklab watch <jobid> --output-dir <dir>"
+    puts stderr "       hpccoworklab diagnose <jobid>"
+}
+
+module-whatis "hpccoworklab: pre-submission and live-monitoring checks for Slurm job scripts"
+
+set HPCCOWORKLAB_HOME "$::env(HOME)/.local/hpccoworklab-venv"
+
+prepend-path PATH "$HPCCOWORKLAB_HOME/bin"
+
+# Bundled config name; hpccoworklab resolves it from the installed package, so no
+# --config is needed. (See `hpccoworklab/configs/`.)
+setenv HPCCOWORKLAB_DEFAULT_CONFIG "libra"
