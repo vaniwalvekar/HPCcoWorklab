@@ -407,6 +407,30 @@ def check_conflicting_modules(content, conflicting_groups):
     return issues
 
 
+_IDLE_LOOP_RE = re.compile(r"\bwhile\s+(?:true|\[\s*1\s*\]|:)\b|\bfor\s*\(\s*;\s*;\s*\)")
+_SLEEP_RE = re.compile(r"\bsleep\s+\d")
+
+
+def detect_idle_hold(content, time_limit=None, walltime_hours=6):
+    """HPC-36: an infinite 'while true' + 'sleep' loop means the job sits idle
+    holding its allocation and self-dispatches work outside the scheduler.
+    Advisory only (some 'hold' queues intend exactly this)."""
+    if not _IDLE_LOOP_RE.search(content) or not _SLEEP_RE.search(content):
+        return None
+    secs = _time_str_to_seconds(time_limit)
+    long_alloc = secs is not None and secs >= walltime_hours * 3600
+    msg = ("This looks like a long-lived idle/hold loop (a 'while true' with 'sleep'): the job "
+           "sits waiting rather than computing, holding its allocation and self-dispatching work "
+           "outside Slurm's view.")
+    if long_alloc:
+        msg += (f" A {_fmt_duration(secs)} walltime can also block other users from those "
+                "resources. Confirm this is allowed on your partition (some 'hold' queues intend "
+                "it); otherwise use a real job array/workflow or a shorter allocation.")
+    else:
+        msg += " Confirm this is intended - a batch job that never self-terminates wastes walltime."
+    return msg
+
+
 def check_script(script_path, config):
     content = read_script(script_path)
     issues = []
@@ -585,6 +609,12 @@ def check_script(script_path, config):
                                   config.get("checkpoint_time_threshold_hours", 24))
     if _ck:
         issues.append(_ck)
+
+    # --- Idle/hold loop advisory (HPC-36) ---
+    _idle = detect_idle_hold(content, time_limit,
+                             config.get("idle_hold_warn_hours", 6))
+    if _idle:
+        issues.append(_idle)
 
     # --- Software -> module-load recommendations (HPC-22) ---
     for _name, _mods in recommend_modules(content, config.get("software_map")):
