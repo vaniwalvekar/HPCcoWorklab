@@ -60,7 +60,7 @@ from hpccoworklab.checker import (
     find_sbatch_value, parse_gpu_count,
     recommend_checkpointing, recommend_modules, recommend_partitions,
     check_containers, _time_str_to_seconds,
-    check_array_usage, check_conflicting_modules,
+    check_array_usage, check_conflicting_modules, detect_idle_hold,
 )
 
 
@@ -383,3 +383,33 @@ def test_check_conflicting_integration(tmp_path):
     s = _job(tmp_path, "#!/bin/bash\n#SBATCH --partition compute\nmodule load gcc/9\ngcc --version\nmodule load gcc/12\n")
     _, issues = check_script(s, cfg)
     assert any("conflict" in i.lower() for i in issues)
+
+
+# --- HPC-36: idle/hold loop advisory ---------------------------------------
+
+def test_idle_hold_detected_long():
+    content = "while true; do for f in q/*.sh; do run; done; sleep 60; done"
+    msg = detect_idle_hold(content, "7-00:00:00", walltime_hours=6)
+    assert msg and "idle/hold" in msg.lower()
+    assert "block other users" in msg   # long-alloc note fired
+
+def test_idle_hold_detected_short():
+    content = "while true; do check; sleep 30; done"
+    msg = detect_idle_hold(content, "01:00:00", walltime_hours=6)
+    assert msg and "idle/hold" in msg.lower()
+    assert "block other users" not in msg
+
+def test_idle_hold_forloop():
+    assert detect_idle_hold("for(;;) do sleep 10; done", "02:00:00")
+
+def test_no_loop_no_advisory():
+    assert detect_idle_hold("python train.py", "02:00:00") is None
+
+def test_loop_without_sleep_no_advisory():
+    assert detect_idle_hold("while true; do compute; done", "02:00:00") is None
+
+def test_check_reports_idle_hold(tmp_path):
+    s = _job(tmp_path, "#!/bin/bash\n#SBATCH --partition compute\n#SBATCH --time 3-00:00:00\n"
+                       "while true; do poll; sleep 60; done\n")
+    _, issues = check_script(s, _CFG)
+    assert any("idle/hold" in i.lower() for i in issues)
