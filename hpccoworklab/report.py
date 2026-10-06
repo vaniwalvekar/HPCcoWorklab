@@ -1,5 +1,5 @@
 """
-hpclint.report - post-run utilization analysis (HPC-21).
+hpccoworklab.report - post-run utilization analysis (HPC-21).
 
 Answers the question researchers hate: "am I wasting my allocation?" It pulls a
 user's recent jobs from `sacct` and compares what each job *asked for* (CPUs x

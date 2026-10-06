@@ -1,13 +1,13 @@
 # Changelog
 
-All notable changes to hpclint are documented here.
+All notable changes to HPCcoWorklab are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
 ### Added
-- **`hpclint check`** — pre-submission validation: partition validity, required/
+- **`hpccoworklab check`** — pre-submission validation: partition validity, required/
   recommended fields, GPU sanity, CPU ceilings, core-overflow math, unit-safe
   memory parsing (`M/G/T`, bare number = MB), slow-storage (`$HOME`) warnings,
   missing referenced files, MPI-vs-threaded awareness.
@@ -16,20 +16,20 @@ this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     walltime checkpointing nudge.
   - Batch 2: `--array` validator (malformed spec + unused task-id), config-driven
     conflicting-module detection.
-- **`hpclint watch`** — live status via `squeue` + `sstat`; busy detection uses
+- **`hpccoworklab watch`** — live status via `squeue` + `sstat`; busy detection uses
   real `AveCPU` (not wall time); distinguishes *busy-but-silent* vs *blocked*;
   output-directory activity (stale vs never-written); `--log` progress detection
   (rate/ETA) via config `progress_patterns`/`completion_markers`; queue position
   for pending jobs; `--sample-seconds` to compute throughput.
-- **`hpclint diagnose`** — translates `sacct` state + exit code to plain English;
+- **`hpccoworklab diagnose`** — translates `sacct` state + exit code to plain English;
   handles `CANCELLED by <uid>`, transient/ghost `PENDING`/`RUNNING`.
-- **`hpclint ask`** — config-driven submission advisor (partition + modules +
+- **`hpccoworklab ask`** — config-driven submission advisor (partition + modules +
   sbatch skeleton) from a short spec.
-- **`hpclint report`** — `sacct`-based CPU over-request analysis (core-hours asked
+- **`hpccoworklab report`** — `sacct`-based CPU over-request analysis (core-hours asked
   vs used, utilization, worst offenders).
-- **`hpclint repro`** — reproducibility snapshot (loaded modules via
+- **`hpccoworklab repro`** — reproducibility snapshot (loaded modules via
   `$LOADEDMODULES`, `sacct` resources, cluster/python/host).
-- **`hpclint check --ai`** — optional, advisory, fail-safe LLM review (off by
+- **`hpccoworklab check --ai`** — optional, advisory, fail-safe LLM review (off by
   default; never changes exit codes; user-configured non-NRP endpoint).
 - Cluster-agnostic YAML configs; bundled into the wheel (`--config libra` resolves
   to a packaged config). Meaningful exit codes for every command
@@ -44,5 +44,5 @@ this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Slurm is absent, and `squeue` field padding/non-numeric counts.
 
 ## [0.1.0] - 2026
-- Initial packaged release: `hpclint` console entry point, editable install,
+- Initial packaged release: `hpccoworklab` console entry point, editable install,
   `check` command, YAML cluster configs, TestPyPI publication.

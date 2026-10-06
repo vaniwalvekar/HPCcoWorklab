@@ -17,4 +17,8 @@ htmlcov/
 venv/
 
 # Generated artifacts
+hpccoworklab-repro-*.txt
 hpclint-repro-*.txt
+
+# Local-only real job scripts dropped in for manual testing (not repo fixtures)
+tests/fixtures/slurm-*.sh

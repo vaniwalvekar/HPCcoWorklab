@@ -1,5 +1,5 @@
 """
-hpclint.checker — core logic for checking a Slurm job script against a
+hpccoworklab.checker — core logic for checking a Slurm job script against a
 cluster's real hardware limits and submission rules.
 """
 
@@ -49,7 +49,7 @@ def read_script(path):
 def load_config(path):
     """Load a cluster YAML. Accepts a filesystem path, or a bundled config name
     (e.g. 'libra', 'libra.yaml', 'configs/libra.yaml') resolved from the
-    installed package, so `pip install hpclint` works without the repo."""
+    installed package, so `pip install hpccoworklab` works without the repo."""
     if path and os.path.isfile(path):
         with open(path, "r") as f:
             return yaml.safe_load(f)
@@ -60,11 +60,11 @@ def load_config(path):
         try:
             from importlib import resources
             try:
-                ref = resources.files("hpclint.configs").joinpath(name)   # 3.9+
+                ref = resources.files("hpccoworklab.configs").joinpath(name)   # 3.9+
                 if ref.is_file():
                     return yaml.safe_load(ref.read_text())
             except AttributeError:
-                text = resources.read_text("hpclint.configs", name)        # 3.8
+                text = resources.read_text("hpccoworklab.configs", name)        # 3.8
                 return yaml.safe_load(text)
         except Exception:
             pass
@@ -73,7 +73,7 @@ def load_config(path):
         return yaml.safe_load(f)
 
 
-# Long --key <-> short -x equivalence for the options hpclint inspects.
+# Long --key <-> short -x equivalence for the options hpccoworklab inspects.
 _SHORT_ALIASES = {
     "partition": "p",
     "nodes": "N",
@@ -344,7 +344,7 @@ def _loaded_modules(content):
 def check_conflicting_modules(content, conflicting_groups):
     """HPC-42: flag when two modules known to be mutually exclusive on this
     cluster are loaded together. Entirely config-driven (conflicting_groups) -
-    hpclint hardcodes nothing. A group is a list of module-name substrings."""
+    hpccoworklab hardcodes nothing. A group is a list of module-name substrings."""
     issues = []
     toks = _loaded_modules(content)
     if not toks:
@@ -424,7 +424,7 @@ def check_script(script_path, config):
         gpu_count = parse_gpu_count(gpus)
         if gpu_count is None:
             issues.append(
-                f"--gpus='{gpus}' isn't in a form hpclint can count; double-check the syntax."
+                f"--gpus='{gpus}' isn't in a form hpccoworklab can count; double-check the syntax."
             )
         elif not has_gpu and gpu_count != 0:
             issues.append(

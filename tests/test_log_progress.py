@@ -8,7 +8,7 @@ inputs are dicts.
 import os
 import time
 
-from hpclint.monitor import (
+from hpccoworklab.monitor import (
     read_log_progress,
     assess_job_health,
     health_exit_code,

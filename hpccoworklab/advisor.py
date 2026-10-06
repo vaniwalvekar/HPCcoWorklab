@@ -1,5 +1,5 @@
 """
-hpclint.advisor — turn a short description of a workload into a suggested
+hpccoworklab.advisor — turn a short description of a workload into a suggested
 partition, module loads, and a ready-to-edit sbatch skeleton (HPC-24, `ask`).
 
 Deterministic and config-driven: it reads only the cluster YAML

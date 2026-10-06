@@ -1,4 +1,4 @@
-"""hpclint — a cluster-agnostic linter for Slurm job scripts."""
+"""hpccoworklab — a cluster-agnostic linter for Slurm job scripts."""
 
 from .checker import check_script, parse_mem_to_gb, load_config, find_referenced_files
 

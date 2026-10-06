@@ -1,7 +1,7 @@
-"""Tests for hpclint.repro (HPC-25): module-env parsing + snapshot assembly.
+"""Tests for hpccoworklab.repro (HPC-25): module-env parsing + snapshot assembly.
 job_resources is live-only (verified on Libra, HPC-10)."""
 
-from hpclint.repro import loaded_modules, build_snapshot
+from hpccoworklab.repro import loaded_modules, build_snapshot
 
 
 def test_loaded_modules_colon_separated():

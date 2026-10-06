@@ -1,7 +1,7 @@
-"""Tests for hpclint.report (HPC-21): sacct usage parsing + utilization summary.
+"""Tests for hpccoworklab.report (HPC-21): sacct usage parsing + utilization summary.
 Pure logic only - run_sacct_usage is exercised on Libra (HPC-10)."""
 
-from hpclint.report import parse_usage_line, summarize
+from hpccoworklab.report import parse_usage_line, summarize
 
 
 def test_parse_usage_line_full():

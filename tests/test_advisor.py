@@ -1,6 +1,6 @@
-"""Tests for hpclint.advisor (HPC-24 `ask`): pure, config-driven, no Slurm."""
+"""Tests for hpccoworklab.advisor (HPC-24 `ask`): pure, config-driven, no Slurm."""
 
-from hpclint.advisor import (
+from hpccoworklab.advisor import (
     suggest_partition, suggest_modules, build_sbatch, suggest_submission,
 )
 

@@ -1,10 +1,10 @@
 """
-Tests for hpclint.diagnose — parsing and translation logic only, tested
+Tests for hpccoworklab.diagnose — parsing and translation logic only, tested
 against realistic fixture sacct output text (the real subprocess call
 gets verified on Libra later, same as monitor.py).
 """
 
-from hpclint.diagnose import parse_sacct_line, diagnose, diagnose_exit_code
+from hpccoworklab.diagnose import parse_sacct_line, diagnose, diagnose_exit_code
 
 
 # --- sacct parsing -----------------------------------------------------------
