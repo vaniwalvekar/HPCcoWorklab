@@ -57,7 +57,7 @@ def test_mem_no_unit_is_mb():
 # --- HPC-34: directive + GPU-spec parsing robustness ----------------------
 
 from hpccoworklab.checker import (
-    find_sbatch_value, parse_gpu_count,
+    find_sbatch_value, parse_gpu_count, get_gpu_request,
     recommend_checkpointing, recommend_modules, recommend_partitions,
     check_containers, _time_str_to_seconds,
     check_array_usage, check_conflicting_modules,
@@ -261,6 +261,43 @@ def test_load_config_bundled_by_name():
     from hpccoworklab.checker import load_config
     cfg = load_config("libra")          # no path -> resolves to packaged hpccoworklab/configs/libra.yaml
     assert cfg.get("cluster_name") == "SLU Libra"
+
+
+# --- HPC-35: --gres=gpu:N recognized as a GPU request ----------------------
+
+def test_gres_gpu_counted():
+    r = get_gpu_request("#SBATCH --gres=gpu:1\n")
+    assert r["present"] and r["per_node"] == 1
+
+def test_gpus_still_counted():
+    r = get_gpu_request("#SBATCH --gpus=2\n")
+    assert r["present"] and r["total"] == 2
+
+def test_gres_type_colon_count():
+    r = get_gpu_request("#SBATCH --gres=gpu:a100:2\n")
+    assert r["per_node"] == 2
+
+def test_gpus_per_node_counted():
+    r = get_gpu_request("#SBATCH --gpus-per-node=1\n")
+    assert r["present"] and r["per_node"] == 1
+
+def test_no_gpu_request():
+    assert not get_gpu_request("#SBATCH --partition compute\n")["present"]
+
+def test_gres_non_gpu_ignored():
+    assert not get_gpu_request("#SBATCH --gres=mpol:2\n")["present"]
+
+def test_gres_job_not_falsely_missing_gpu(tmp_path):
+    cfg = {"cluster_name": "X",
+           "partitions": {"gpu": {"is_default": True, "has_gpu": True, "gpu_max": 2,
+                                  "cpus_per_task_max": 64, "mem_gb_max": 512}},
+           "required_fields": ["gpus"], "recommended_fields": ["account"]}
+    s = _job(tmp_path, "#!/bin/bash\n#SBATCH --partition gpu\n#SBATCH --gres=gpu:1\n"
+                       "#SBATCH --account a1\n#SBATCH --mem=8G\n#SBATCH --time 01:00:00\n"
+                       "#SBATCH --cpus-per-task 2\n")
+    _, issues = check_script(s, cfg)
+    assert not any("No GPU request" in i for i in issues)
+    assert not any("has no GPUs" in i for i in issues)
 
 
 # --- Batch 1 (HPC-22/23/27/28) ---------------------------------------------
